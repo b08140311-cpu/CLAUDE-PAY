@@ -50,6 +50,11 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Install launcher icons
+        run: |
+          pip install pillow --break-system-packages || pip install pillow
+          python3 scripts/make_icons.py
+
       - name: Install native app-list plugin
         run: |
           mkdir -p android/app/src/main/java/com/payhub/app

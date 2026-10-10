@@ -1,5 +1,11 @@
 name: Export exact MPay HTML
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-html.yml'
+      - 'src/**'
+      - 'index.html'
   workflow_dispatch:
 permissions:
   contents: write

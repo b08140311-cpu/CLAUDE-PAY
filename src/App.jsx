@@ -294,6 +294,18 @@ export default class App extends React.Component {
     this.setState({ pickSlot: i }, () => this.loadShortcuts((this.state.targets[i] || {}).pkg));
   }
 
+  // coalesce high-frequency pointer updates to one setState per frame
+  queue(patch) {
+    this.pending = Object.assign(this.pending || {}, patch);
+    if (this.pendRaf) return;
+    this.pendRaf = requestAnimationFrame(() => {
+      this.pendRaf = null;
+      const pt = this.pending;
+      this.pending = null;
+      if (pt) this.setState(pt);
+    });
+  }
+
   // scale/zoom to scale pointer deltas from screen px to layout px
   px(v) { return v / (this.state.k || 1); }
 
@@ -332,7 +344,8 @@ export default class App extends React.Component {
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
-        faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + '' + (paying && front ? ',0 0 ' + Math.round(26 + prog * 50) + 'px ' + Math.round(-2 + prog * 10) + 'px ' + p.glow : ''),
+        faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + '',
+        glowOp: paying && front ? 0.35 + 0.65 * prog : 0,
         pick: () => {
           if (self.state.payOpen) return;
           self.sw = null;
@@ -347,12 +360,15 @@ export default class App extends React.Component {
         },
         move: (e) => {
           if (!self.drag) return;
-          self.setState({ dragX: Math.max(0, Math.min(260, self.px(e.clientX - self.drag.x0))) });
+          self.queue({ dragX: Math.max(0, Math.min(260, self.px(e.clientX - self.drag.x0))) });
         },
         up: () => {
           if (!self.drag) return;
           self.drag = null;
-          if ((self.state.dragX || 0) > 130) self.finishPay();
+          const dxNow = (self.pending && self.pending.dragX != null) ? self.pending.dragX : (self.state.dragX || 0);
+          if (self.pendRaf) { cancelAnimationFrame(self.pendRaf); self.pendRaf = null; }
+          self.pending = null;
+          if (dxNow > 130) self.finishPay();
           else self.setState({ dragging: false, dragX: 0 });
         },
         key: (e) => {
@@ -380,13 +396,15 @@ export default class App extends React.Component {
             self.setState({ swiping: true });
           } else return;
         }
-        self.setState({ swipeX: Math.max(-140, Math.min(140, dx0)) });
+        self.queue({ swipeX: Math.max(-140, Math.min(140, dx0)) });
       },
       up: () => {
         const w = self.sw;
         self.sw = null;
         if (!w || !w.active) return;
-        const d = self.state.swipeX || 0;
+        const d = (self.pending && self.pending.swipeX != null) ? self.pending.swipeX : (self.state.swipeX || 0);
+        if (self.pendRaf) { cancelAnimationFrame(self.pendRaf); self.pendRaf = null; }
+        self.pending = null;
         const v = d / Math.max(1, performance.now() - w.t0);
         let dir = 0;
         if (Math.abs(d) > 46 || Math.abs(v) > 0.5) dir = d < 0 ? 1 : -1;
@@ -500,6 +518,7 @@ export default class App extends React.Component {
                       <div className={'wc-turn ' + v.turnCls} style={css('position:absolute;inset:0;transform-style:preserve-3d;--tx:' + v.payTx + 'px;--ty:' + v.payTy + 'px')}>
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
+                            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
                             <div style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66);box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease')}>
                               <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
                               <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
@@ -624,7 +643,7 @@ export default class App extends React.Component {
               <div className="wc-applist" style={css('flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px')}>
                 <button type="button" onClick={() => this.assignApp(null)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;background:rgba(255,255,255,.06);color:#9AA0B8;text-align:left;font-size:15px;font-weight:500')}>使用預設 App</button>
                 {this.state.appsLoading && <div style={css('padding:16px;color:#9AA0B8;font-size:14px')}>Loading…</div>}
-                {v.shown.map((a) => {
+                {this.state.pickOpen && v.shown.map((a) => {
                   const on = this.state.targets[this.state.pickSlot] && this.state.targets[this.state.pickSlot].pkg === a.package;
                   return (
                     <button key={a.package} type="button" onClick={() => this.assignApp(a)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;color:#F2F4FF;text-align:left;font-size:15px;font-weight:500;background:' + (on ? 'rgba(90,162,255,.28)' : 'rgba(255,255,255,.06)') + ';box-shadow:inset 0 0 0 ' + (on ? '1.5px #5AA2FF' : '1px rgba(255,255,255,.1)'))}>

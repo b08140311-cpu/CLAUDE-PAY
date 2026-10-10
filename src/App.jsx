@@ -1,4 +1,5 @@
 import React from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { openProvider } from './launch.js';
 import { listApps, loadTargets, saveTargets } from './appList.js';
 
@@ -26,7 +27,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, targets: loadTargets(), pickOpen: false, pickSlot: 0, apps: [], appsLoading: false, q: '' };
+    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.sw = null;
     this.swiped = false;
@@ -40,12 +41,18 @@ export default class App extends React.Component {
       { name: 'PX Pay', sub: 'PX Pay', color: '#FFD21F', lite: '#FFD21F', glow: 'rgba(255,210,31,.32)', edge: 'rgba(255,210,31,.5)', gA: 'rgba(255,210,31,.66)', gB: 'rgba(255,210,31,.26)', glyph: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v6h-4v-2M14 18h2v2h-2z' },
       { name: 'PayPal', sub: 'PayPal', color: '#0070E0', lite: '#5AA2FF', glow: 'rgba(0,112,224,.45)', edge: 'rgba(90,162,255,.55)', gA: 'rgba(40,130,255,.76)', gB: 'rgba(40,130,255,.32)', glyph: 'M5 12h14M13 6l6 6-6 6' }
     ];
-    this.onResize = () => this.setState({ k: Math.min(window.innerWidth / 390, window.innerHeight / 844) || 1 });
+    this.onResize = () => {
+      const k = (window.innerWidth / 390) || 1;
+      this.setState({ k, H: Math.max(640, Math.round(window.innerHeight / k)) });
+    };
   }
 
   componentDidMount() {
     this.onResize();
     window.addEventListener('resize', this.onResize);
+    try {
+      CapApp.addListener('backButton', () => this.handleBack()).then((h) => { this.backHandle = h; }).catch(() => {});
+    } catch (e) {}
     const sc = document.getElementById('wc-scroller');
     if (!sc) return;
     this.sc = sc;
@@ -137,6 +144,7 @@ export default class App extends React.Component {
   }
 
   componentWillUnmount() {
+    try { if (this.backHandle) this.backHandle.remove(); } catch (e) {}
     window.removeEventListener('resize', this.onResize);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.outTimer) clearTimeout(this.outTimer);
@@ -193,7 +201,7 @@ export default class App extends React.Component {
       const cr = el.getBoundingClientRect(), rr = root.getBoundingClientRect();
       const k = rr.width / 390 || 1;
       tx = Math.round((rr.left + rr.width / 2 - (cr.left + cr.width / 2)) / k);
-      ty = Math.round((rr.top + 372 * k - (cr.top + cr.height / 2)) / k);
+      ty = Math.round((rr.top + this.state.H * 0.44 * k - (cr.top + cr.height / 2)) / k);
     } catch (e) {}
     if (this.outTimer) clearTimeout(this.outTimer);
     this.setState({ payOpen: true, payOut: false, payTx: tx, payTy: ty, dragX: 0, dragging: false, done: false });
@@ -222,6 +230,17 @@ export default class App extends React.Component {
     this.setState({ toast: '' });
     setTimeout(() => this.setState({ toast: msg }), 20);
     this.toastTimer = setTimeout(() => this.setState({ toast: '' }), 2400);
+  }
+
+  handleBack() {
+    const st = this.state;
+    if (st.exitAsk) { this.setState({ exitAsk: false }); return; }
+    if (st.pickOpen) { this.setState({ pickOpen: false }); return; }
+    if (st.payOpen) { this.closePay(); return; }
+    const sc = this.sc || document.getElementById('wc-scroller');
+    const h = (sc && sc.clientHeight) || st.H;
+    if (sc && sc.scrollTop > h * 0.5) { this.animateTo(0, 1100); return; }
+    this.setState({ exitAsk: true });
   }
 
   async openPicker() {
@@ -383,7 +402,7 @@ export default class App extends React.Component {
       payTx: st.payTx || 0,
       payTy: st.payTy || 0,
       progressPct: Math.round(prog * 100),
-      hintStyle: 'opacity:' + (paying ? 1 : 0) + ';visibility:' + (paying ? 'visible' : 'hidden') + ';transition:opacity .6s ease ' + (paying ? '1.1s' : '0s') + ',visibility 0s linear ' + (paying ? '0s' : '.6s') + ';',
+      hintStyle: 'top:' + Math.round(st.H * 0.673) + 'px;opacity:' + (paying ? 1 : 0) + ';visibility:' + (paying ? 'visible' : 'hidden') + ';transition:opacity .6s ease ' + (paying ? '1.1s' : '0s') + ',visibility 0s linear ' + (paying ? '0s' : '.6s') + ';',
       cancelPay: () => self.closePay(),
       selColor: P[sel].lite,
       ctaLabel: 'Open ' + ((st.targets[sel] && st.targets[sel].label) || P[sel].name),
@@ -410,14 +429,14 @@ export default class App extends React.Component {
     const v = this.renderVals();
     const k = this.state.k || 1;
     const blob = (pos, size, color, op, dur, del, bx, by, by2) => (
-      <div className="wc-blob" style={css(pos + ';width:' + size + 'px;height:' + size + 'px;background:radial-gradient(closest-side,rgba(0,0,0,0) 46%,' + color + ' 60%,rgba(0,0,0,0) 100%);opacity:' + op + ';--dur:' + dur + 's;--del:' + del + 's;--bx:' + bx + 'px;--by:' + by + 'px;--by2:' + by2 + 'px')} />
+      <div className="wc-blob" style={css(pos + ';width:' + size + 'px;height:' + size + 'px;background:radial-gradient(closest-side,rgba(0,0,0,0) 26%,' + color + ' 56%,rgba(0,0,0,0) 100%);opacity:' + op + ';--dur:' + dur + 's;--del:' + del + 's;--bx:' + bx + 'px;--by:' + by + 'px;--by2:' + by2 + 'px')} />
     );
     const Glyph = ({ d, size, stroke, sw, extra }) => (
       <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...GLYPH_PROPS} stroke={stroke} strokeWidth={sw} style={extra}><path d={d} /></svg>
     );
     return (
-      <div id="fit" style={{ transform: 'translate(-50%,-50%) scale(' + k + ')' }}>
-        <div id="wc-root" className={'wc-root ' + v.rootCls} style={css("position:relative;width:390px;height:844px;overflow:hidden;background:linear-gradient(180deg,#02050F,#000 70%);font-family:'DM Sans',system-ui,sans-serif;color:#F2F4FF")}>
+      <div id="fit" style={{ height: this.state.H, transform: 'translate(-50%,-50%) scale(' + k + ')' }}>
+        <div id="wc-root" className={'wc-root ' + v.rootCls} style={css("--H:" + this.state.H + "px;position:relative;width:390px;height:100%;overflow:hidden;background:linear-gradient(180deg,#02050F,#000 70%);font-family:'DM Sans',system-ui,sans-serif;color:#F2F4FF")}>
           <div aria-hidden="true" className="wc-bg" />
           <div aria-hidden="true" className="wc-liquid">
             {blob('left:-80px;top:60px', 300, '#1E5BFF', .55, 11, 0, 50, -40, 60)}
@@ -439,8 +458,8 @@ export default class App extends React.Component {
                 </div>
 
                 <div style={css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px')}>
-                  <div style={css('position:relative;width:340px;height:250px;box-sizing:border-box;padding-right:48px;padding-top:40px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
-                    <div id="wc-stage" className="wc-float" style={css('position:relative;width:268px;height:170px;transform-style:preserve-3d')}>
+                  <div style={css('position:relative;width:360px;height:272px;box-sizing:border-box;padding-right:40px;padding-top:40px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
+                    <div id="wc-stage" className="wc-float" style={css('position:relative;width:290px;height:184px;transform-style:preserve-3d')}>
                       <div className={'wc-turn ' + v.turnCls} style={css('position:absolute;inset:0;transform-style:preserve-3d;--tx:' + v.payTx + 'px;--ty:' + v.payTy + 'px')}>
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
@@ -448,7 +467,7 @@ export default class App extends React.Component {
                               <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
                               <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
                                 <div style={css('display:flex;justify-content:space-between;align-items:center')}>
-                                  <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>{c.name}</span>
+                                  <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px")}>{c.name}</span>
                                   <Glyph d={c.glyph} size={24} stroke={c.lite} sw={1.9} />
                                 </div>
                                 <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.lite + ';opacity:' + c.subOp)}>{c.sub}</span>
@@ -461,10 +480,10 @@ export default class App extends React.Component {
                   </div>
 
                   <div className="wc-rise wc-outbound" style={css('--ox:0px;--oy:150px;--amp:120px;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center')}>
-                    <h1 style={css("margin:0;font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:32px;line-height:1.15;letter-spacing:-.02em;text-wrap:balance")}>One place to pay</h1>
+                    <h1 style={css("margin:0;font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:34px;line-height:1.15;letter-spacing:-.02em;text-wrap:balance")}>One place to pay</h1>
                     <div role="group" aria-label="Choose a payment app" style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:342px')}>
                       {v.tiles.map((t) => (
-                        <button key={t.name} type="button" aria-pressed={t.on} aria-label={t.name} onClick={t.pick} className="wc-tap" style={css('aspect-ratio:1/1;border:0;border-radius:24px;box-sizing:border-box;padding:14px;background:' + t.bg + ';color:#F2F4FF;-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;' + t.style)}>
+                        <button key={t.name} type="button" aria-pressed={t.on} aria-label={t.name} onClick={t.pick} className="wc-tap" style={css('aspect-ratio:1/1;border:0;border-radius:24px;box-sizing:border-box;padding:14px;background:' + t.bg + ';color:#F2F4FF;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;' + t.style)}>
                           <Glyph d={t.glyph} size={30} stroke={t.lite} sw={2} />
                           <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:15px;line-height:1.1")}>{t.name}</span>
                         </button>
@@ -481,7 +500,7 @@ export default class App extends React.Component {
 
             <section id="wc-default" className="wc-snap">
               <div className="wc-page" style={css('position:relative;height:100%;box-sizing:border-box;padding:96px 20px 150px;display:flex;flex-direction:column;justify-content:center')}>
-                <button type="button" aria-label="Choose apps to open" onClick={() => this.openPicker()} className="wc-tap" style={css('position:absolute;right:20px;bottom:142px;height:48px;padding:0 18px;border-radius:24px;border:0;display:flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.34),rgba(255,255,255,.14));-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);color:#FFFFFF;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.65)')}>
+                <button type="button" aria-label="Choose apps to open" onClick={() => this.openPicker()} className="wc-tap" style={css('position:absolute;right:20px;bottom:142px;height:48px;padding:0 18px;border-radius:24px;border:0;display:flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.34),rgba(255,255,255,.14));color:#FFFFFF;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.65)')}>
                   <Glyph d="M4 6h16M4 12h16M4 18h10" size={18} stroke="currentColor" sw={2.2} />
                   Choose apps
                 </button>
@@ -490,7 +509,7 @@ export default class App extends React.Component {
                   <p style={css('margin:0 4px 8px;font-size:15px;line-height:1.45;color:#9AA0B8')}>The main button opens this one first.</p>
                   <div role="radiogroup" aria-label="Default payment app" style={css('display:flex;flex-direction:column;gap:12px')}>
                     {v.radios.map((d) => (
-                      <button key={d.name} type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
+                      <button key={d.name} type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
                         <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
                           <Glyph d={d.glyph} size={22} stroke="currentColor" sw={2} />
                         </div>
@@ -515,11 +534,11 @@ export default class App extends React.Component {
             <div className="wc-dot wc-d2" />
           </div>
 
-          <button type="button" aria-label="Back" onClick={v.back} className="wc-outbound" style={css('--ox:-70px;--oy:-70px;position:absolute;left:16px;top:50px;width:44px;height:44px;border-radius:22px;border:0;background:linear-gradient(145deg,rgba(255,255,255,.42),rgba(255,255,255,.2));-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);color:#FFFFFF;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),inset 0 1px 0 rgba(255,255,255,.7)')}>
+          <button type="button" aria-label="Back" onClick={v.back} className="wc-outbound" style={css('--ox:-70px;--oy:-70px;position:absolute;left:16px;top:50px;width:44px;height:44px;border-radius:22px;border:0;background:linear-gradient(145deg,rgba(255,255,255,.42),rgba(255,255,255,.2));color:#FFFFFF;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),inset 0 1px 0 rgba(255,255,255,.7)')}>
             <Glyph d="M15 5l-7 7 7 7" size={22} stroke="currentColor" sw={2.2} />
           </button>
 
-          <div style={css('position:absolute;left:0;right:0;top:568px;display:flex;flex-direction:column;align-items:center;gap:14px;' + v.hintStyle)}>
+          <div style={css('position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:14px;' + v.hintStyle)}>
             <div aria-hidden="true" style={css('width:240px;height:6px;border-radius:3px;background:rgba(255,255,255,.16);overflow:hidden')}>
               <div style={{ height: '100%', width: v.progressPct + '%', borderRadius: 3, background: v.selColor }} />
             </div>
@@ -558,6 +577,16 @@ export default class App extends React.Component {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          <div className={'wc-sheet' + (this.state.exitAsk ? ' on' : '')} style={{ justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,8,.6)' }} onClick={() => this.setState({ exitAsk: false })}>
+            <div onClick={(e) => e.stopPropagation()} style={css('width:300px;box-sizing:border-box;padding:22px 20px 18px;border-radius:26px;background:linear-gradient(145deg,rgba(60,90,170,.5),rgba(10,16,36,.94));box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 1px rgba(255,255,255,.16);display:flex;flex-direction:column;gap:16px;text-align:center')}>
+              <div style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>離開 Pay Hub?</div>
+              <div style={css('display:flex;gap:10px')}>
+                <button type="button" onClick={() => this.setState({ exitAsk: false })} className="wc-tap" style={css('flex:1;height:46px;border-radius:23px;border:0;background:rgba(255,255,255,.18);color:#fff;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)')}>留下</button>
+                <button type="button" onClick={() => { try { CapApp.exitApp(); } catch (e) {} this.setState({ exitAsk: false }); }} className="wc-tap" style={css('flex:1;height:46px;border-radius:23px;border:0;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(226,232,255,.78));color:#05060A;font-weight:700;font-size:15px')}>離開</button>
               </div>
             </div>
           </div>

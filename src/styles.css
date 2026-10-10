@@ -1,5 +1,5 @@
 html,body,#app{margin:0;height:100%;background:#000;overflow:hidden;-webkit-tap-highlight-color:transparent}
-#fit{position:fixed;left:50%;top:50%;width:390px;height:844px;transform-origin:center center}
+#fit{position:fixed;left:50%;top:50%;width:390px;transform-origin:center center}
 button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-root{timeline-scope:--wcs;isolation:isolate}
 .wc-scroll{scrollbar-width:none;overscroll-behavior:contain;scroll-timeline:--wcs block}
@@ -7,9 +7,9 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-snap{height:100%;box-sizing:border-box}
 
 @keyframes wcPage{
-  0%{opacity:0;transform:scale(.8);filter:blur(8px)}
-  42%,58%{opacity:1;transform:scale(1);filter:blur(0)}
-  100%{opacity:0;transform:scale(1.22);filter:blur(8px)}
+  0%{opacity:0;transform:scale(.86)}
+  42%,58%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(1.16)}
 }
 @keyframes wcRise{
   0%{transform:translateY(var(--amp,100px))}
@@ -44,10 +44,10 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-bg{z-index:-1;position:absolute;inset:0;pointer-events:none;animation:wcPulse 9s ease-in-out infinite;background:radial-gradient(120% 60% at 50% 105%,rgba(24,80,230,.6),rgba(0,0,0,0) 70%),radial-gradient(90% 45% at 15% 0%,rgba(10,50,170,.45),rgba(0,0,0,0) 70%),radial-gradient(70% 40% at 100% 45%,rgba(20,100,255,.3),rgba(0,0,0,0) 70%)}
 @keyframes wcNudge{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(8px);opacity:1}}
 
-.wc-liquid{z-index:-1;position:absolute;left:0;top:0;width:390px;height:844px;pointer-events:none;opacity:.5;filter:blur(30px)}
+.wc-liquid{z-index:-1;position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;opacity:.6}
 .wc-spot{z-index:-1;position:absolute;left:-15px;top:162px;width:420px;height:420px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .5s ease}
 .wc-paying .wc-spot{opacity:.5}
-.wc-blob{position:absolute;mix-blend-mode:screen;animation:wcBlob var(--dur,12s) ease-in-out infinite;animation-delay:var(--del,0s)}
+.wc-blob{position:absolute;mix-blend-mode:screen;will-change:transform;animation:wcBlob var(--dur,12s) ease-in-out infinite;animation-delay:var(--del,0s)}
 .wc-float{animation:wcFloat 7s ease-in-out infinite}
 .wc-nudge{animation:wcNudge 1.4s ease-in-out infinite}
 .wc-outbound{transition:opacity .35s ease,translate .6s cubic-bezier(.2,.8,.2,1),scale .6s cubic-bezier(.2,.8,.2,1)}
@@ -65,10 +65,10 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 @supports (animation-timeline: view()) {
   .wc-page{animation:wcPage linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
   .wc-rise{animation:wcRise linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
-  .wc-turn{animation:wcTurn linear both;animation-timeline:scroll(nearest);animation-range:0px 844px}
+  .wc-turn{animation:wcTurn linear both;animation-timeline:scroll(nearest);animation-range:0px var(--H,844px)}
   .wc-dot{animation-timing-function:linear;animation-timeline:--wcs}
-  .wc-d1{animation-name:wcDotOut;animation-fill-mode:both;animation-range:0px 844px}
-  .wc-d2{animation-name:wcDotIn;animation-fill-mode:both;animation-range:0px 844px}
+  .wc-d1{animation-name:wcDotOut;animation-fill-mode:both;animation-range:0px var(--H,844px)}
+  .wc-d2{animation-name:wcDotIn;animation-fill-mode:both;animation-range:0px var(--H,844px)}
 }
 @media (prefers-reduced-motion:reduce){.wc-pin,.wc-pout,.wc-nudge,.wc-page,.wc-rise,.wc-turn,.wc-float,.wc-blob,.wc-bob,.wc-toast{animation:none}}
 

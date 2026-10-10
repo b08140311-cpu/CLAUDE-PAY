@@ -6,6 +6,13 @@ import { launchPackage, launchShortcut } from './appList.js';
 // 回傳訊息字串供畫面顯示;成功開啟時回傳 ''。
 export async function openProvider(i, custom) {
   const a = LAUNCH[i];
+  if (!Capacitor.isNativePlatform()) {
+    // iOS / 網頁版:只能用 URL Scheme 或「捷徑」開啟
+    const url = (custom && custom.url) || a.url || (i === 2 ? 'paypal://' : '');
+    if (!url) return a.name + ': 請先在「選擇 App」設定要開啟的捷徑或網址';
+    window.location.href = url;
+    return '';
+  }
   if (custom && custom.pkg) {
     if (!Capacitor.isNativePlatform()) return custom.label + ': 只有安裝版 App 才能開啟';
     if (custom.shortcut) {

@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { openProvider } from './launch.js';
@@ -271,6 +272,7 @@ export default class App extends React.Component {
   }
 
   async openPicker() {
+    if (!Capacitor.isNativePlatform()) { this.webPick(); return; }
     this.setState({ pickOpen: true, pickSlot: this.state.sel, q: '', appsLoading: !this.state.apps.length });
     this.loadShortcuts((this.state.targets[this.state.sel] || {}).pkg);
     if (!this.state.apps.length) {
@@ -293,6 +295,25 @@ export default class App extends React.Component {
     const ids = new Set(pre.map((x) => x.id));
     const list = pre.concat(found.filter((x) => !ids.has(x.id)));
     if ((this.state.targets[this.state.pickSlot] || {}).pkg === pkg) this.setState({ shortcuts: list, scLoading: false });
+  }
+
+  webPick() {
+    // iOS / 網頁版無法列出手機上的 APP,改成輸入「捷徑」名稱或網址(URL Scheme)。
+    const slot = this.state.sel;
+    const cur = this.state.targets[slot];
+    const v = window.prompt('這張卡要開啟什麼?\n\n• 輸入你在 iPhone「捷徑」App 建立的捷徑名稱(捷徑可以開任何 APP)\n• 或輸入網址 / URL Scheme,例如 line://pay/generateQR\n\n留空 = 還原預設', cur ? (cur.url || cur.shortcutName || '') : '');
+    if (v === null) return;
+    const val = v.trim();
+    const t = this.state.targets.slice();
+    if (!val) t[slot] = null;
+    else {
+      const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(val);
+      const label = (window.prompt('顯示名稱', (cur && cur.label) || (isUrl ? val.split(':')[0] : val)) || '').trim() || val;
+      t[slot] = isUrl ? { pkg: 'web', label, icon: '', url: val } : { pkg: 'web', label, icon: '', url: 'shortcuts://run-shortcut?name=' + encodeURIComponent(val), shortcutName: val };
+    }
+    saveTargets(t);
+    this.setState({ targets: t });
+    this.showToast(t[slot] ? '已設定:' + t[slot].label : '已還原預設');
   }
 
   assignApp(app) {

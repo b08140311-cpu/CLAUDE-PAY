@@ -62,7 +62,7 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-tap{transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .25s ease,box-shadow .25s ease}
 .wc-tap:active{transform:scale(.96) !important}
 
-@supports (animation-timeline: view()) {
+@supports (animation-timeline: view()) and (not (display: block)) {
   .wc-page{animation:wcPage linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
   .wc-rise{animation:wcRise linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
   .wc-turn{animation:wcTurn linear both;animation-timeline:scroll(nearest);animation-range:0px var(--H,844px)}
@@ -78,3 +78,12 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-sheet.on .wc-sheet-panel{transform:none}
 .wc-applist{scrollbar-width:none;overscroll-behavior:contain}
 .wc-applist::-webkit-scrollbar{display:none}
+
+.wc-scroll{overscroll-behavior-y:none;scroll-behavior:auto;contain:layout paint}
+.wc-page,.wc-rise{animation:none !important;transform:none !important}
+.wc-turn,.wc-dot{animation-timeline:auto !important}
+.wc-liquid{opacity:.4}.wc-blob{animation-duration:24s !important;filter:blur(18px)}
+.mpay-splash{position:absolute;inset:0;z-index:100;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;animation:mpay-reveal 1.75s both;pointer-events:all}
+.mpay-wordmark{font-family:'Sora',system-ui,sans-serif;font-size:62px;font-weight:700;letter-spacing:-.09em;transform:skew(-8deg);color:white;text-shadow:0 0 32px rgba(255,255,255,.13)}
+.mpay-wordmark span{color:#70A8FF}.mpay-signature{font-size:9px;letter-spacing:.52em;color:#7A8293;margin-left:13px}
+@keyframes mpay-reveal{0%{opacity:1}73%{opacity:1}100%{opacity:0}}

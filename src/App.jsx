@@ -258,7 +258,7 @@ export default class App extends React.Component {
 
   assignApp(app) {
     const t = this.state.targets.slice();
-    t[this.state.pickSlot] = app ? { pkg: app.package, label: app.label } : null;
+    t[this.state.pickSlot] = app ? { pkg: app.package, label: app.label, icon: app.icon || '' } : null;
     saveTargets(t);
     this.setState({ targets: t });
   }
@@ -299,7 +299,7 @@ export default class App extends React.Component {
       }
       return {
         domId: 'wc-card-' + i,
-        name: p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
+        icon: (st.targets[i] && st.targets[i].icon) || '', name: p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
         faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4)' + (paying && front ? ',0 0 ' + Math.round(26 + prog * 50) + 'px ' + Math.round(-2 + prog * 10) + 'px ' + p.glow : ''),
         pick: () => {
@@ -366,6 +366,7 @@ export default class App extends React.Component {
       }
     };
     const tiles = P.map((p, i) => ({
+      icon: (st.targets[i] && st.targets[i].icon) || '',
       name: p.name, glyph: p.glyph, lite: p.lite,
       bg: 'linear-gradient(145deg,' + p.gA + ',' + p.gB + ')',
       on: i === sel,
@@ -382,6 +383,7 @@ export default class App extends React.Component {
       }
     }));
     const radios = P.map((p, i) => ({
+      icon: (st.targets[i] && st.targets[i].icon) || '',
       name: p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
       on: i === sel,
       status: (st.targets[i] ? '→ ' + st.targets[i].label : (i === sel ? 'Default' : 'Tap to make default')),
@@ -431,6 +433,9 @@ export default class App extends React.Component {
     const blob = (pos, size, color, op, dur, del, bx, by, by2) => (
       <div className="wc-blob" style={css(pos + ';width:' + size + 'px;height:' + size + 'px;background:radial-gradient(closest-side,rgba(0,0,0,0) 26%,' + color + ' 56%,rgba(0,0,0,0) 100%);opacity:' + op + ';--dur:' + dur + 's;--del:' + del + 's;--bx:' + bx + 'px;--by:' + by + 'px;--by2:' + by2 + 'px')} />
     );
+    const Icon = ({ icon, d, size, stroke, sw, extra, radius }) => (icon
+      ? <img src={icon} alt="" width={size} height={size} style={{ borderRadius: radius || Math.round(size * 0.24), flex: 'none', display: 'block' }} />
+      : <Glyph d={d} size={size} stroke={stroke} sw={sw} extra={extra} />);
     const Glyph = ({ d, size, stroke, sw, extra }) => (
       <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...GLYPH_PROPS} stroke={stroke} strokeWidth={sw} style={extra}><path d={d} /></svg>
     );
@@ -468,7 +473,7 @@ export default class App extends React.Component {
                               <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
                                 <div style={css('display:flex;justify-content:space-between;align-items:center')}>
                                   <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px")}>{c.name}</span>
-                                  <Glyph d={c.glyph} size={24} stroke={c.lite} sw={1.9} />
+                                  <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.lite} sw={1.9} />
                                 </div>
                                 <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.lite + ';opacity:' + c.subOp)}>{c.sub}</span>
                               </div>
@@ -484,7 +489,7 @@ export default class App extends React.Component {
                     <div role="group" aria-label="Choose a payment app" style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:342px')}>
                       {v.tiles.map((t) => (
                         <button key={t.name} type="button" aria-pressed={t.on} aria-label={t.name} onClick={t.pick} className="wc-tap" style={css('aspect-ratio:1/1;border:0;border-radius:24px;box-sizing:border-box;padding:14px;background:' + t.bg + ';color:#F2F4FF;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;' + t.style)}>
-                          <Glyph d={t.glyph} size={30} stroke={t.lite} sw={2} />
+                          <Icon icon={t.icon} d={t.glyph} size={t.icon ? 38 : 30} stroke={t.lite} sw={2} />
                           <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:15px;line-height:1.1")}>{t.name}</span>
                         </button>
                       ))}
@@ -511,7 +516,7 @@ export default class App extends React.Component {
                     {v.radios.map((d) => (
                       <button key={d.name} type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
                         <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
-                          <Glyph d={d.glyph} size={22} stroke="currentColor" sw={2} />
+                          <Icon icon={d.icon} d={d.glyph} size={d.icon ? 36 : 22} stroke="currentColor" sw={2} />
                         </div>
                         <div style={css('display:flex;flex-direction:column;gap:2px;flex:1;min-width:0')}>
                           <span style={css('font-size:17px;font-weight:700;line-height:1.2')}>{d.name}</span>
@@ -559,7 +564,7 @@ export default class App extends React.Component {
               <div style={css('display:flex;gap:8px')}>
                 {v.radios.map((d, i) => (
                   <button key={d.name} type="button" onClick={() => this.setState({ pickSlot: i })} className="wc-tap" style={css('flex:1;min-width:0;border:0;border-radius:16px;padding:10px 8px;text-align:left;color:#F2F4FF;background:' + (this.state.pickSlot === i ? 'linear-gradient(145deg,' + d.gA + ',rgba(255,255,255,.08))' : 'rgba(255,255,255,.08)') + ';box-shadow:inset 0 0 0 ' + (this.state.pickSlot === i ? '1.5px ' + d.lite : '1px rgba(255,255,255,.2)'))}>
-                    <div style={css('font-size:12px;font-weight:700;opacity:.8')}>{d.name}</div>
+                    <div style={css('display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;opacity:.85')}>{d.icon ? <img src={d.icon} alt="" width="16" height="16" style={{ borderRadius: 4 }} /> : null}{d.name}</div>
                     <div style={css('font-size:13px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{this.state.targets[i] ? this.state.targets[i].label : '預設'}</div>
                   </button>
                 ))}

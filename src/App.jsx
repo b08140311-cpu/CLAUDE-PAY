@@ -28,8 +28,9 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
+    this.splashTimer = null;
     this.sw = null;
     this.swiped = false;
     this.drag = null;
@@ -50,6 +51,7 @@ export default class App extends React.Component {
 
   componentDidMount() {
     this.onResize();
+    this.splashTimer=setTimeout(()=>this.setState({splash:false}),1750);
     window.addEventListener('resize', this.onResize);
     try {
       CapApp.addListener('backButton', () => this.handleBack()).then((h) => { this.backHandle = h; }).catch(() => {});
@@ -106,9 +108,9 @@ export default class App extends React.Component {
         v = (a.y - b.y) / Math.max(1, b.t - a.t);
       }
       let dir = 0;
-      if (Math.abs(v) > 0.35) dir = v > 0 ? 1 : -1;
-      else if (Math.abs(dy) > h * 0.15) dir = dy > 0 ? 1 : -1;
-      this.animateTo(clamp(start + dir) * h, 1250);
+      if (Math.abs(v) > 0.16) dir = v > 0 ? 1 : -1;
+      else if (Math.abs(dy) > h * 0.10) dir = dy > 0 ? 1 : -1;
+      this.animateTo(clamp(start + dir) * h, 1850);
     };
     this.onWheel = (e) => {
       if (this.state.pickOpen) return;
@@ -117,13 +119,12 @@ export default class App extends React.Component {
       const now = performance.now();
       const gap = now - this.lastWheel;
       this.lastWheel = now;
-      if (this.animating) return;
-      if (this.wheelLocked && gap < 140) return;
+      if (this.animating || (this.wheelLocked && gap < 220)) return;
       if (Math.abs(e.deltaY) < 4) return;
       const h = H();
       const cur = Math.round(sc.scrollTop / h);
       this.wheelLocked = true;
-      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1250);
+      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1850);
     };
     this.onScroll = () => {
       if (this.animating || this.touching) return;
@@ -147,6 +148,7 @@ export default class App extends React.Component {
   componentWillUnmount() {
     try { if (this.backHandle) this.backHandle.remove(); } catch (e) {}
     window.removeEventListener('resize', this.onResize);
+    if(this.splashTimer)clearTimeout(this.splashTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.outTimer) clearTimeout(this.outTimer);
     if (this.settleTimer) clearTimeout(this.settleTimer);
@@ -176,12 +178,12 @@ export default class App extends React.Component {
     const from = sc.scrollTop;
     const dist = top - from;
     if (Math.abs(dist) < 1) { sc.scrollTop = top; return; }
-    const norm = 1 - Math.pow(2, -10);
+    const norm = 1 - Math.exp(-6.4);
     const t0 = performance.now();
     this.animating = true;
     const step = (now) => {
       const t = Math.min(1, (now - t0) / dur);
-      const e = (1 - Math.pow(2, -10 * t)) / norm;
+      const e = (1 - Math.exp(-6.4 * t)) / norm;
       sc.scrollTop = from + dist * e;
       if (t < 1) {
         this.raf = requestAnimationFrame(step);
@@ -286,6 +288,8 @@ export default class App extends React.Component {
     this.setState({ targets: t });
   }
 
+  renameCard(i,value){const names=[...this.state.names];names[i]=value.slice(0,24);try{localStorage.setItem('mpay.names.v1',JSON.stringify(names))}catch(e){}this.setState({names});}
+
   pickSlotTo(i) {
     this.setState({ pickSlot: i }, () => this.loadShortcuts((this.state.targets[i] || {}).pkg));
   }
@@ -326,7 +330,7 @@ export default class App extends React.Component {
       }
       return {
         domId: 'wc-card-' + i,
-        icon: (st.targets[i] && st.targets[i].icon) || '', name: p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
+        icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
         faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4)' + (paying && front ? ',0 0 ' + Math.round(26 + prog * 50) + 'px ' + Math.round(-2 + prog * 10) + 'px ' + p.glow : ''),
         pick: () => {
@@ -394,7 +398,7 @@ export default class App extends React.Component {
     };
     const tiles = P.map((p, i) => ({
       icon: (st.targets[i] && st.targets[i].icon) || '',
-      name: p.name, glyph: p.glyph, lite: p.lite,
+      name: st.names[i] || p.name, glyph: p.glyph, lite: p.lite,
       bg: 'linear-gradient(145deg,' + p.gA + ',' + p.gB + ')',
       on: i === sel,
       style: i === sel
@@ -411,7 +415,7 @@ export default class App extends React.Component {
     }));
     const radios = P.map((p, i) => ({
       icon: (st.targets[i] && st.targets[i].icon) || '',
-      name: p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
+      name: st.names[i] || p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
       on: i === sel,
       status: (st.targets[i] ? '→ ' + st.targets[i].label + (st.targets[i].shortcut ? ' · ' + st.targets[i].shortcut.label : '') : (i === sel ? 'Default' : 'Tap to make default')),
       bg: i === sel ? 'linear-gradient(145deg,' + p.gA + ',rgba(255,255,255,.05))' : 'linear-gradient(145deg,rgba(255,255,255,.18),rgba(255,255,255,.07))',
@@ -469,6 +473,7 @@ export default class App extends React.Component {
     return (
       <div id="fit" style={{ height: this.state.H, transform: 'translate(-50%,-50%) scale(' + k + ')' }}>
         <div id="wc-root" className={'wc-root ' + v.rootCls} style={css("--H:" + this.state.H + "px;position:relative;width:390px;height:100%;overflow:hidden;background:linear-gradient(180deg,#02050F,#000 70%);font-family:'DM Sans',system-ui,sans-serif;color:#F2F4FF")}>
+          {this.state.splash && <div className="mpay-splash"><div className="mpay-wordmark">MPay<span>!</span></div><div className="mpay-signature">MADE TO MOVE</div></div>}
           <div aria-hidden="true" className="wc-bg" />
           <div aria-hidden="true" className="wc-liquid">
             {blob('left:-80px;top:60px', 300, '#1E5BFF', .55, 11, 0, 50, -40, 60)}
@@ -483,14 +488,14 @@ export default class App extends React.Component {
 
           <div id="wc-scroller" className="wc-scroll" style={css('position:absolute;inset:0;overflow-y:auto;overflow-x:hidden')}>
             <section id="wc-top" className="wc-snap" style={css('touch-action:pan-y')} onPointerDown={v.sw.down} onPointerMove={v.sw.move} onPointerUp={v.sw.up} onPointerCancel={v.sw.up}>
-              <div className="wc-page" style={css('height:100%;box-sizing:border-box;padding:56px 24px 124px;display:flex;flex-direction:column;align-items:center')}>
+              <div className="wc-page" style={css('height:100%;box-sizing:border-box;padding:54px 24px 24px;display:flex;flex-direction:column;align-items:center')}>
                 <div className="wc-rise wc-outbound" style={css('--ox:0px;--oy:-90px;--amp:50px;align-self:stretch;display:flex;align-items:center;justify-content:space-between;min-height:44px;padding-left:52px')}>
                   <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:15px")}>Pay Hub</span>
                   <span style={css('font-size:13px;font-weight:500;color:#9AA0B8')}>Galaxy A57</span>
                 </div>
 
-                <div style={css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px')}>
-                  <div style={css('position:relative;width:360px;height:272px;box-sizing:border-box;padding-right:40px;padding-top:40px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
+                <div style={css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(9px,2vh,18px)')}>
+                  <div style={css('position:relative;width:360px;height:clamp(210px,32vh,272px);box-sizing:border-box;padding-right:40px;padding-top:40px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
                     <div id="wc-stage" className="wc-float" style={css('position:relative;width:290px;height:184px;transform-style:preserve-3d')}>
                       <div className={'wc-turn ' + v.turnCls} style={css('position:absolute;inset:0;transform-style:preserve-3d;--tx:' + v.payTx + 'px;--ty:' + v.payTy + 'px')}>
                         {v.cards.map((c) => (
@@ -511,7 +516,7 @@ export default class App extends React.Component {
                     </div>
                   </div>
 
-                  <div className="wc-rise wc-outbound" style={css('--ox:0px;--oy:150px;--amp:120px;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center')}>
+                  <div className="wc-rise wc-outbound" style={css('--ox:0px;--oy:150px;--amp:120px;display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2vh,20px);text-align:center')}>
                     <h1 style={css("margin:0;font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:34px;line-height:1.15;letter-spacing:-.02em;text-wrap:balance")}>One place to pay</h1>
                     <div role="group" aria-label="Choose a payment app" style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:342px')}>
                       {v.tiles.map((t) => (
@@ -524,7 +529,7 @@ export default class App extends React.Component {
                   </div>
                 </div>
 
-                <div className="wc-bob wc-outbound" aria-hidden="true" style={css('--ox:0px;--oy:110px;position:absolute;left:0;right:0;bottom:104px;color:#9AA0B8;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase')}>
+                <div className="wc-bob wc-outbound" aria-hidden="true" style={css('--ox:0px;--oy:110px;position:absolute;left:0;right:0;bottom:18px;color:#9AA0B8;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase')}>
                   <Glyph d="M6 15l6-6 6 6" size={16} stroke="currentColor" sw={2} />
                 </div>
               </div>
@@ -614,6 +619,7 @@ export default class App extends React.Component {
                   </div>
                 </div>
               )}
+              <div style={css('display:flex;align-items:center;gap:10px;padding:0 3px')}><label htmlFor="mpay-name" style={css('font-size:12px;color:#AEBBD5;white-space:nowrap')}>卡片名稱</label><input id="mpay-name" maxLength={24} value={this.state.names[this.state.pickSlot]} onChange={(e)=>this.renameCard(this.state.pickSlot,e.target.value)} placeholder="自訂卡片名稱" style={css('height:38px;min-width:0;flex:1;border-radius:12px;border:0;padding:0 12px;background:rgba(255,255,255,.1);color:#fff;font-size:14px;outline:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)')} /></div>
               <input value={this.state.q} onChange={(e) => this.setState({ q: e.target.value })} placeholder="Search apps" style={css("height:42px;border-radius:14px;border:0;padding:0 14px;background:rgba(255,255,255,.1);color:#fff;font-size:15px;outline:none;font-family:'DM Sans',system-ui,sans-serif;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)")} />
               <div className="wc-applist" style={css('flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px')}>
                 <button type="button" onClick={() => this.assignApp(null)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;background:rgba(255,255,255,.06);color:#9AA0B8;text-align:left;font-size:15px;font-weight:500')}>使用預設 App</button>
@@ -647,12 +653,7 @@ export default class App extends React.Component {
             </div>
           )}
 
-          <div className="wc-outbound" style={css('--ox:0px;--oy:130px;position:absolute;left:0;right:0;bottom:0;padding:48px 20px 28px')}>
-            <button type="button" onClick={v.openSel} className="wc-tap" style={css("width:100%;height:56px;border-radius:28px;border:0;background:linear-gradient(145deg,rgba(255,255,255,.95),rgba(226,232,255,.78));-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);color:#05060A;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.9),inset 0 1px 0 #FFFFFF,0 0 22px -6px " + v.selColor)}>
-              {v.ctaLabel}
-              <Glyph d="M7 17L17 7M9 7h8v8" size={18} stroke="currentColor" sw={2.4} />
-            </button>
-          </div>
+
         </div>
       </div>
     );

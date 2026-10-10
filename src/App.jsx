@@ -393,7 +393,7 @@ export default class App extends React.Component {
       } else if (sN === 3) {
         // brushed steel, tinted by the card color
         faceBg = 'linear-gradient(120deg,#cdd2da 0%,#f4f6f9 26%,#b2b8c3 50%,#eef0f4 74%,#a1a8b4 100%)';
-        face2 = 'linear-gradient(' + rgba(rgb, 0.18) + ',' + rgba(rgb, 0.18) + '),repeating-linear-gradient(92deg,rgba(255,255,255,.22) 0 1px,rgba(40,46,58,.07) 1px 3px)';
+        face2 = 'linear-gradient(' + rgba(rgb, 0.18) + ',' + rgba(rgb, 0.18) + ')';
         faceShadow = 'inset 0 0 0 1px rgba(255,255,255,.75),inset 0 -10px 18px -10px rgba(0,0,0,.3),0 0 10px -7px ' + p.lite;
         fg = '#171B24'; sub = '#2A303C'; ink = 'rgba(28,34,46,.5)'; tint = 0.12;
       } else {
@@ -433,7 +433,7 @@ export default class App extends React.Component {
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
         faceShadow: L.faceShadow,
-        glowOp: paying && front ? 0.35 + 0.65 * prog : 0,
+        glowOp: paying ? (front ? 0.35 + 0.65 * prog : 0) : (front ? 0.5 : 0.28),
         pick: () => {
           if (self.state.payOpen) return;
           self.sw = null;
@@ -656,7 +656,7 @@ export default class App extends React.Component {
                       <div className={'wc-turn ' + v.turnCls} style={css('position:absolute;inset:0;transform-style:preserve-3d;--tx:' + v.payTx + 'px;--ty:' + v.payTy + 'px')}>
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
-                            <div id={'wc-glow-' + c.idx} aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
+                            <div id={'wc-glow-' + c.idx} aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} className={'wc-cglow'} />
                             {face(c)}
                           </button>
                         ))}

@@ -369,7 +369,7 @@ export default class App extends React.Component {
     const look = (p, front, sN = styleN) => {
       const rgb = p.rgb || hex2rgb(p.color);
       const light = lum(rgb) > 0.6;
-      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)';
+      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),' + toHex(mix(rgb, [8, 10, 16], 0.84));
       let fg = '#F2F4FF', sub = p.lite, face2 = '';
       if (sN === 1) {
         faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
@@ -377,7 +377,7 @@ export default class App extends React.Component {
         fg = light ? '#10131C' : '#FFFFFF';
         sub = fg;
       } else if (sN === 2) {
-        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),#070A12';
+        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),' + toHex(mix(rgb, [6, 8, 14], 0.9));
         face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
         fg = p.lite;
         sub = p.lite;
@@ -573,7 +573,6 @@ export default class App extends React.Component {
     );
     const face = (c) => (
       <div style={css('position:absolute;inset:0')}>
-        <div aria-hidden="true" style={css('position:absolute;inset:0;border-radius:22px;background:#0A0D16')} />
         {c.prev && faceBody(c, c.prev, 'wc-face-out', 'prev-' + c.styleKey)}
         {faceBody(c, c, 'wc-face-in', c.styleKey)}
         {c.dust && RING.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;--dx:' + d[3] + 'px;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}

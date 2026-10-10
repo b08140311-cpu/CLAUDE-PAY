@@ -148,3 +148,17 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 }
 .wc-face-in{animation:wcFaceIn .7s cubic-bezier(.2,.8,.2,1) both}
 @media (prefers-reduced-motion:reduce){.wc-face-out{animation:none;opacity:0}}
+
+/* old card flies out to the left and back, new card flies in from the right; the new face turns opaque
+   in the first 40% while the old one stays fully opaque, so there is never a see-through gap */
+@keyframes wcSwapOut{
+  0%,40%{opacity:1}
+  100%{opacity:0;transform:translate3d(-70px,-14px,-70px) rotateY(20deg) rotateZ(-4deg) scale(.9)}
+}
+@keyframes wcSwapIn{
+  0%{opacity:0;transform:translate3d(70px,16px,-70px) rotateY(-20deg) rotateZ(4deg) scale(.9)}
+  40%{opacity:1}
+  100%{opacity:1;transform:none}
+}
+.wc-face-out{animation:wcSwapOut .7s cubic-bezier(.3,.1,.2,1) both}
+.wc-face-in{animation:wcSwapIn .7s cubic-bezier(.2,.8,.2,1) both}

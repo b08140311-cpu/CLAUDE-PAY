@@ -49,7 +49,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, prevStyle: null, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyles: (() => { const v = lsGet('mpay.cardstyles.v1', null); return Array.isArray(v) && v.length === 3 ? v : [0, 0, 0]; })(), styleTicks: [0, 0, 0], dustIdx: -1, prev: null, colorOpen: -1, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.splashTimer = null;
     this.sw = null;
@@ -325,14 +325,20 @@ export default class App extends React.Component {
     this.setState({ colors: c });
   }
 
-  setCardStyle(n) {
-    lsSet('mpay.cardstyle.v1', n);
+  // style is stored per card; tapping the style a card already has does nothing (no remount, no gap)
+  setCardStyle(i, n) {
+    const cur = this.state.cardStyles[i] || 0;
+    if (n === cur) return;
+    const cs = this.state.cardStyles.slice();
+    cs[i] = n;
+    lsSet('mpay.cardstyles.v1', cs);
+    const ticks = this.state.styleTicks.slice();
+    ticks[i] += 1;
     if (this.dustTimer) clearTimeout(this.dustTimer);
     if (this.prevTimer) clearTimeout(this.prevTimer);
-    const old = this.state.cardStyle || 0;
-    this.setState({ prevStyle: n === old ? null : old, cardStyle: n, styleTick: this.state.styleTick + 1, dustOn: true });
-    this.dustTimer = setTimeout(() => this.setState({ dustOn: false }), 1500);
-    this.prevTimer = setTimeout(() => this.setState({ prevStyle: null }), 900);
+    this.setState({ cardStyles: cs, styleTicks: ticks, prev: { i, style: cur }, dustIdx: i });
+    this.dustTimer = setTimeout(() => this.setState({ dustIdx: -1 }), 1500);
+    this.prevTimer = setTimeout(() => this.setState({ prev: null }), 900);
   }
 
   renameCard(i,value){const names=[...this.state.names];names[i]=value.slice(0,24);try{localStorage.setItem('mpay.names.v1',JSON.stringify(names))}catch(e){}this.setState({names});}
@@ -360,13 +366,12 @@ export default class App extends React.Component {
     const st = this.state;
     const sel = st.sel || 0;
     const P = this.P.map((p, i) => (st.colors[i] ? derive(st.colors[i], p) : p));
-    const styleN = st.cardStyle || 0;
     const self = this;
     const paying = !!st.payOpen;
     const dx = st.dragX || 0;
     const prog = Math.min(1, dx / 150);
     const sx = st.swipeX || 0;
-    const look = (p, front, sN = styleN) => {
+    const look = (p, front, sN, ci) => {
       const rgb = p.rgb || hex2rgb(p.color);
       const light = lum(rgb) > 0.6;
       let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),' + toHex(mix(rgb, [8, 10, 16], 0.84));
@@ -383,7 +388,7 @@ export default class App extends React.Component {
         sub = p.lite;
       }
       const faceShadow = sN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (sN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite);
-      return { faceBg, face2, fg, subCol: sub, faceShadow, glow: p.glow, styleKey: styleN + '-' + st.styleTick, dust: !!st.dustOn && front };
+      return { faceBg, face2, fg, subCol: sub, faceShadow, glow: p.glow, styleKey: sN + '-' + st.styleTicks[ci], dust: st.dustIdx === ci };
     };
     const cards = P.map((p, i) => {
       const m = (i - sel + 3) % 3;
@@ -407,9 +412,9 @@ export default class App extends React.Component {
         if (front) extra = 'translate:' + Math.round(sx * 0.8) + 'px 0;rotate:' + (sx * 0.04).toFixed(2) + 'deg;';
         tr = 'transform .9s cubic-bezier(.2,.8,.2,1),opacity .6s ease,translate 0s,rotate 0s';
       }
-      const L = look(p, front);
+      const L = look(p, front, st.cardStyles[i], i);
       return {
-        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust, prev: (st.prevStyle != null ? look(p, front, st.prevStyle) : null),
+        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust, prev: (st.prev && st.prev.i === i ? look(p, front, st.prev.style, i) : null),
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
@@ -521,7 +526,7 @@ export default class App extends React.Component {
       cards, tiles, radios, sw, shown, preview,
       spotColor: P[sel].glow,
       rootCls: (paying ? 'wc-paying' : '') + (st.customOpen ? ' wc-custom' : ''),
-      cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true); return Object.assign({}, L2, { prev: (st.prevStyle != null ? look(cp, true, st.prevStyle) : null), name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
+      cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true, st.cardStyles[ci], ci); return Object.assign({}, L2, { prev: (st.prev && st.prev.i === ci ? look(cp, true, st.prev.style, ci) : null), name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
       turnCls: paying ? 'wc-pin' : (st.payOut ? 'wc-pout' : ''),
       payTx: st.payTx || 0,
       payTy: st.payTy || 0,
@@ -695,11 +700,11 @@ export default class App extends React.Component {
 
 
           <div className={'wc-clayer' + (this.state.customOpen ? ' on' : '')} aria-hidden={!this.state.customOpen}>
-            <div className="wc-cspot" style={{ background: 'radial-gradient(closest-side,' + v.cface.glowc + ',rgba(0,0,0,0) 72%)' }} />
             <button type="button" onClick={() => this.closeCustom()} className="wc-tap wc-cin" style={css('position:absolute;right:18px;top:52px;height:40px;padding:0 18px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.55)')}>Done</button>
 
-            <div className="wc-cin" onPointerDown={(e) => { this.cs = { x0: e.clientX }; }} onPointerUp={(e) => { const w = this.cs; this.cs = null; if (!w) return; const dx = this.px(e.clientX - w.x0); if (Math.abs(dx) > 40) this.setCardStyle(((this.state.cardStyle || 0) + (dx < 0 ? 1 : -1) + 3) % 3); }} style={css('touch-action:pan-y;position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.15) + 'px;height:290px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
+            <div className="wc-cin" onPointerDown={(e) => { this.cs = { x0: e.clientX }; }} onPointerUp={(e) => { const w = this.cs; this.cs = null; if (!w) return; const dx = this.px(e.clientX - w.x0); if (Math.abs(dx) > 40) this.setCardStyle(this.state.customIdx, ((this.state.cardStyles[this.state.customIdx] || 0) + (dx < 0 ? 1 : -1) + 3) % 3); }} style={css('touch-action:pan-y;position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.15) + 'px;height:290px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
               <div className="wc-float" style={css('position:relative;width:290px;height:184px;transform-style:preserve-3d')}>
+                <div className="wc-cspot" style={{ background: 'radial-gradient(closest-side,' + v.cface.glowc + ',rgba(0,0,0,0) 72%)' }} />
                 <div style={css('position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(10deg) rotateY(-14deg) rotateZ(-2deg) scale(1.12)')}>
                   <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 70px 6px ' + v.cface.glowc, opacity: 0.55 }} />
                   <div style={css('position:absolute;inset:0')}>{face(v.cface)}</div>
@@ -720,7 +725,7 @@ export default class App extends React.Component {
                     </button>
                     <button type="button" onClick={() => this.setState({ customPane: 'style' })} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:68px;padding:0 18px;border:0;border-radius:22px;color:#F2F4FF;text-align:left;background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.08));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.4)')}>
                       <span aria-hidden="true" style={css('width:34px;height:22px;border-radius:6px;flex:none;background:linear-gradient(135deg,' + v.preview.hi + ',' + v.preview.color + ' 45%,' + v.preview.lo + ');box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)')} />
-                      <span style={css('flex:1;font-size:17px;font-weight:700')}>Card style<span style={css('display:block;font-size:13px;font-weight:500;color:#9AA0B8;margin-top:1px')}>{CARD_STYLES[this.state.cardStyle || 0]}</span></span>
+                      <span style={css('flex:1;font-size:17px;font-weight:700')}>Card style<span style={css('display:block;font-size:13px;font-weight:500;color:#9AA0B8;margin-top:1px')}>{CARD_STYLES[this.state.cardStyles[this.state.customIdx] || 0]}</span></span>
                       <Glyph d="M9 6l6 6-6 6" size={18} stroke="#9AA0B8" sw={2.2} />
                     </button>
                   </>
@@ -751,12 +756,12 @@ export default class App extends React.Component {
                     <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
                       {CARD_STYLES.map((nm, n) => {
                         const pv = v.preview;
-                        const on = (this.state.cardStyle || 0) === n;
+                        const on = (this.state.cardStyles[this.state.customIdx] || 0) === n;
                         let bg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)', ov = '', bd = 'inset 0 0 0 1px ' + pv.edge, fgc = '#F2F4FF';
                         if (n === 1) { bg = 'linear-gradient(135deg,' + pv.hi + ' 0%,' + pv.color + ' 38%,' + pv.lo + ' 100%)'; ov = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%)'; bd = 'inset 0 0 0 1px rgba(255,255,255,.45)'; fgc = pv.light ? '#10131C' : '#FFFFFF'; }
                         if (n === 2) { bg = 'radial-gradient(120% 90% at 100% 0%,' + pv.soft + ',rgba(0,0,0,0) 60%),#070A12'; ov = 'repeating-linear-gradient(0deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px),repeating-linear-gradient(90deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px)'; bd = 'inset 0 0 0 1.5px ' + pv.color + ',inset 0 0 18px ' + pv.soft; fgc = pv.lite; }
                         return (
-                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(n)} className="wc-tap" style={css('border:0;padding:0;background:none;color:#F2F4FF;display:flex;flex-direction:column;gap:7px;align-items:center')}>
+                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(this.state.customIdx, n)} className="wc-tap" style={css('border:0;padding:0;background:none;color:#F2F4FF;display:flex;flex-direction:column;gap:7px;align-items:center')}>
                             <div style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:14px;overflow:hidden;background:' + bg + ';box-shadow:' + bd + (on ? ',0 0 0 2px rgba(242,244,255,.9),0 0 18px -2px ' + pv.color : '') + ';color:' + fgc)}>
                               {ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: ov }} />}
                               <span style={css("position:absolute;left:8px;top:7px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:11px;color:" + fgc)}>{pv.name}</span>

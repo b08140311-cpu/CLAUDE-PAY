@@ -162,3 +162,5 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 }
 .wc-face-out{animation:wcSwapOut .7s cubic-bezier(.3,.1,.2,1) both}
 .wc-face-in{animation:wcSwapIn .7s cubic-bezier(.2,.8,.2,1) both}
+
+.wc-cspot{left:50% !important;top:50% !important;margin:-210px 0 0 -210px}

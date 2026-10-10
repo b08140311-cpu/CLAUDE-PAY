@@ -32,6 +32,11 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Install native app-list plugin
+        run: |
+          mkdir -p android/app/src/main/java/com/payhub/app
+          cp native/*.java android/app/src/main/java/com/payhub/app/
+
       - name: Declare launchable apps in manifest
         run: python3 scripts/patch_manifest.py
 

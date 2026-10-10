@@ -1,5 +1,6 @@
 import React from 'react';
 import { openProvider } from './launch.js';
+import { listApps, loadTargets, saveTargets } from './appList.js';
 
 // "a:b;c:d" -> React style object
 function css(str) {
@@ -25,7 +26,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1 };
+    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, targets: loadTargets(), pickOpen: false, pickSlot: 0, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.sw = null;
     this.swiped = false;
@@ -57,23 +58,39 @@ export default class App extends React.Component {
     this.touching = false;
     this.settleTimer = null;
     this.onTS = (e) => {
-      if (this.state.payOpen) return;
+      if (this.state.payOpen || this.state.pickOpen) return;
       this.touching = true;
       this.cancelAnim();
-      this.t0 = { top: sc.scrollTop };
-      this.samples = [{ y: e.touches[0].clientY, t: performance.now() }];
+      const t = e.touches[0];
+      this.t0 = { top: sc.scrollTop, x: t.clientX, y: t.clientY, axis: '' };
+      this.samples = [{ y: t.clientY, t: performance.now() }];
     };
     this.onTM = (e) => {
-      this.samples.push({ y: e.touches[0].clientY, t: performance.now() });
+      const w = this.t0;
+      if (!w) return;
+      const t = e.touches[0];
+      if (!w.axis) {
+        const ax = Math.abs(t.clientX - w.x), ay = Math.abs(t.clientY - w.y);
+        if (ax < 6 && ay < 6) return;
+        w.axis = ay >= ax ? 'v' : 'h';
+      }
+      if (w.axis !== 'v') return;
+      if (e.cancelable) e.preventDefault();
+      this.samples.push({ y: t.clientY, t: performance.now() });
       if (this.samples.length > 6) this.samples.shift();
+      const k = this.state.k || 1;
+      const h = H();
+      const top = w.top - (t.clientY - w.y) / k;
+      sc.scrollTop = Math.max(0, Math.min(h, top));
     };
     this.onTE = () => {
-      if (this.state.payOpen) return;
       this.touching = false;
-      if (!this.t0) return;
+      const w = this.t0;
+      this.t0 = null;
+      if (!w || w.axis !== 'v' || this.state.payOpen) return;
       const h = H();
-      const start = Math.round(this.t0.top / h);
-      const dy = sc.scrollTop - this.t0.top;
+      const start = Math.round(w.top / h);
+      const dy = sc.scrollTop - w.top;
       const s = this.samples;
       let v = 0;
       if (s.length > 1) {
@@ -83,10 +100,10 @@ export default class App extends React.Component {
       let dir = 0;
       if (Math.abs(v) > 0.35) dir = v > 0 ? 1 : -1;
       else if (Math.abs(dy) > h * 0.15) dir = dy > 0 ? 1 : -1;
-      this.t0 = null;
-      this.animateTo(clamp(start + dir) * h, 900);
+      this.animateTo(clamp(start + dir) * h, 1250);
     };
     this.onWheel = (e) => {
+      if (this.state.pickOpen) return;
       e.preventDefault();
       if (this.state.payOpen) return;
       const now = performance.now();
@@ -98,7 +115,7 @@ export default class App extends React.Component {
       const h = H();
       const cur = Math.round(sc.scrollTop / h);
       this.wheelLocked = true;
-      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1000);
+      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1250);
     };
     this.onScroll = () => {
       if (this.animating || this.touching) return;
@@ -108,12 +125,12 @@ export default class App extends React.Component {
         const h = H();
         const pos = sc.scrollTop;
         const near = clamp(Math.round(pos / h));
-        if (Math.abs(pos - near * h) > 1) this.animateTo(near * h, 650);
+        if (Math.abs(pos - near * h) > 1) this.animateTo(near * h, 900);
       }, 110);
     };
     sc.addEventListener('scroll', this.onScroll, { passive: true });
     sc.addEventListener('touchstart', this.onTS, { passive: true });
-    sc.addEventListener('touchmove', this.onTM, { passive: true });
+    sc.addEventListener('touchmove', this.onTM, { passive: false });
     sc.addEventListener('touchend', this.onTE, { passive: true });
     sc.addEventListener('touchcancel', this.onTE, { passive: true });
     sc.addEventListener('wheel', this.onWheel, { passive: false });
@@ -150,12 +167,12 @@ export default class App extends React.Component {
     const from = sc.scrollTop;
     const dist = top - from;
     if (Math.abs(dist) < 1) { sc.scrollTop = top; return; }
-    const norm = 1 - Math.pow(2, -8);
+    const norm = 1 - Math.pow(2, -10);
     const t0 = performance.now();
     this.animating = true;
     const step = (now) => {
       const t = Math.min(1, (now - t0) / dur);
-      const e = (1 - Math.pow(2, -8 * t)) / norm;
+      const e = (1 - Math.pow(2, -10 * t)) / norm;
       sc.scrollTop = from + dist * e;
       if (t < 1) {
         this.raf = requestAnimationFrame(step);
@@ -195,7 +212,7 @@ export default class App extends React.Component {
     this.setState({ dragging: false, done: true, dragX: 320 });
     setTimeout(async () => {
       this.closePay();
-      const msg = await openProvider(idx);
+      const msg = await openProvider(idx, this.state.targets[idx]);
       if (msg) this.showToast(msg);
     }, 600);
   }
@@ -205,6 +222,26 @@ export default class App extends React.Component {
     this.setState({ toast: '' });
     setTimeout(() => this.setState({ toast: msg }), 20);
     this.toastTimer = setTimeout(() => this.setState({ toast: '' }), 2400);
+  }
+
+  async openPicker() {
+    this.setState({ pickOpen: true, pickSlot: this.state.sel, q: '', appsLoading: !this.state.apps.length });
+    if (!this.state.apps.length) {
+      try {
+        const apps = await listApps();
+        this.setState({ apps, appsLoading: false });
+      } catch (e) {
+        this.setState({ appsLoading: false });
+        this.showToast('讀取 App 清單失敗');
+      }
+    }
+  }
+
+  assignApp(app) {
+    const t = this.state.targets.slice();
+    t[this.state.pickSlot] = app ? { pkg: app.package, label: app.label } : null;
+    saveTargets(t);
+    this.setState({ targets: t });
   }
 
   // scale/zoom to scale pointer deltas from screen px to layout px
@@ -328,7 +365,7 @@ export default class App extends React.Component {
     const radios = P.map((p, i) => ({
       name: p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
       on: i === sel,
-      status: i === sel ? 'Default' : 'Tap to make default',
+      status: (st.targets[i] ? '→ ' + st.targets[i].label : (i === sel ? 'Default' : 'Tap to make default')),
       bg: i === sel ? 'linear-gradient(145deg,' + p.gA + ',rgba(255,255,255,.05))' : 'linear-gradient(145deg,rgba(255,255,255,.18),rgba(255,255,255,.07))',
       edge: i === sel ? p.lite : 'rgba(255,255,255,.2)',
       ring: i === sel ? p.lite : 'rgba(255,255,255,.3)',
@@ -336,8 +373,10 @@ export default class App extends React.Component {
       tick: i === sel ? 1 : 0,
       pick: () => self.setState({ sel: i })
     }));
+    const q = (st.q || '').trim().toLowerCase();
+    const shown = (st.apps || []).filter((a) => !q || a.label.toLowerCase().includes(q));
     return {
-      cards, tiles, radios, sw,
+      cards, tiles, radios, sw, shown,
       spotColor: P[sel].glow,
       rootCls: paying ? 'wc-paying' : '',
       turnCls: paying ? 'wc-pin' : (st.payOut ? 'wc-pout' : ''),
@@ -347,11 +386,11 @@ export default class App extends React.Component {
       hintStyle: 'opacity:' + (paying ? 1 : 0) + ';visibility:' + (paying ? 'visible' : 'hidden') + ';transition:opacity .6s ease ' + (paying ? '1.1s' : '0s') + ',visibility 0s linear ' + (paying ? '0s' : '.6s') + ';',
       cancelPay: () => self.closePay(),
       selColor: P[sel].lite,
-      ctaLabel: 'Open ' + P[sel].name,
+      ctaLabel: 'Open ' + ((st.targets[sel] && st.targets[sel].label) || P[sel].name),
       hasToast: !!st.toast,
       toast: st.toast,
       openSel: async () => {
-        const msg = await openProvider(sel);
+        const msg = await openProvider(sel, self.state.targets[sel]);
         if (msg) self.showToast(msg);
       },
       back: () => {
@@ -441,7 +480,11 @@ export default class App extends React.Component {
             </section>
 
             <section id="wc-default" className="wc-snap">
-              <div className="wc-page" style={css('height:100%;box-sizing:border-box;padding:96px 20px 150px;display:flex;flex-direction:column;justify-content:center')}>
+              <div className="wc-page" style={css('position:relative;height:100%;box-sizing:border-box;padding:96px 20px 150px;display:flex;flex-direction:column;justify-content:center')}>
+                <button type="button" aria-label="Choose apps to open" onClick={() => this.openPicker()} className="wc-tap" style={css('position:absolute;right:20px;bottom:142px;height:48px;padding:0 18px;border-radius:24px;border:0;display:flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.34),rgba(255,255,255,.14));-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);color:#FFFFFF;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.65)')}>
+                  <Glyph d="M4 6h16M4 12h16M4 18h10" size={18} stroke="currentColor" sw={2.2} />
+                  Choose apps
+                </button>
                 <div className="wc-rise" style={css('--amp:90px;display:flex;flex-direction:column;gap:14px')}>
                   <h2 style={css("margin:0 4px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:24px;letter-spacing:-.01em")}>Default app</h2>
                   <p style={css('margin:0 4px 8px;font-size:15px;line-height:1.45;color:#9AA0B8')}>The main button opens this one first.</p>
@@ -485,6 +528,38 @@ export default class App extends React.Component {
               <svg className="wc-nudge" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...GLYPH_PROPS} stroke="currentColor" strokeWidth="2.4"><path d="M9 6l6 6-6 6" /></svg>
             </div>
             <button type="button" onClick={v.cancelPay} className="wc-tap" style={css('min-height:44px;padding:0 24px;border-radius:22px;border:0;background:rgba(255,255,255,.2);color:#FFFFFF;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.55)')}>Cancel</button>
+          </div>
+
+
+          <div className={'wc-sheet' + (this.state.pickOpen ? ' on' : '')} onClick={() => this.setState({ pickOpen: false })}>
+            <div className="wc-sheet-panel" onClick={(e) => e.stopPropagation()} style={css('box-sizing:border-box;height:640px;padding:20px 16px 24px;border-radius:28px 28px 0 0;background:linear-gradient(180deg,rgba(40,60,120,.55),rgba(8,12,28,.9));-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 1px rgba(255,255,255,.14);display:flex;flex-direction:column;gap:12px')}>
+              <div style={css('display:flex;align-items:center;justify-content:space-between')}>
+                <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>Open on swipe</span>
+                <button type="button" onClick={() => this.setState({ pickOpen: false })} className="wc-tap" style={css('height:40px;padding:0 18px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)')}>Done</button>
+              </div>
+              <div style={css('display:flex;gap:8px')}>
+                {v.radios.map((d, i) => (
+                  <button key={d.name} type="button" onClick={() => this.setState({ pickSlot: i })} className="wc-tap" style={css('flex:1;min-width:0;border:0;border-radius:16px;padding:10px 8px;text-align:left;color:#F2F4FF;background:' + (this.state.pickSlot === i ? 'linear-gradient(145deg,' + d.gA + ',rgba(255,255,255,.08))' : 'rgba(255,255,255,.08)') + ';box-shadow:inset 0 0 0 ' + (this.state.pickSlot === i ? '1.5px ' + d.lite : '1px rgba(255,255,255,.2)'))}>
+                    <div style={css('font-size:12px;font-weight:700;opacity:.8')}>{d.name}</div>
+                    <div style={css('font-size:13px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{this.state.targets[i] ? this.state.targets[i].label : '預設'}</div>
+                  </button>
+                ))}
+              </div>
+              <input value={this.state.q} onChange={(e) => this.setState({ q: e.target.value })} placeholder="Search apps" style={css("height:42px;border-radius:14px;border:0;padding:0 14px;background:rgba(255,255,255,.1);color:#fff;font-size:15px;outline:none;font-family:'DM Sans',system-ui,sans-serif;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)")} />
+              <div className="wc-applist" style={css('flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px')}>
+                <button type="button" onClick={() => this.assignApp(null)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;background:rgba(255,255,255,.06);color:#9AA0B8;text-align:left;font-size:15px;font-weight:500')}>使用預設 App</button>
+                {this.state.appsLoading && <div style={css('padding:16px;color:#9AA0B8;font-size:14px')}>Loading…</div>}
+                {v.shown.map((a) => {
+                  const on = this.state.targets[this.state.pickSlot] && this.state.targets[this.state.pickSlot].pkg === a.package;
+                  return (
+                    <button key={a.package} type="button" onClick={() => this.assignApp(a)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;color:#F2F4FF;text-align:left;font-size:15px;font-weight:500;background:' + (on ? 'rgba(90,162,255,.28)' : 'rgba(255,255,255,.06)') + ';box-shadow:inset 0 0 0 ' + (on ? '1.5px #5AA2FF' : '1px rgba(255,255,255,.1)'))}>
+                      {a.icon ? <img src={a.icon} alt="" width="36" height="36" style={{ borderRadius: 9, flex: 'none' }} /> : <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(255,255,255,.14)', flex: 'none' }} />}
+                      <span style={css('flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{a.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {v.hasToast && (

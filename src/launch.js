@@ -1,10 +1,15 @@
 import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor } from '@capacitor/core';
 import { LAUNCH } from './apps.js';
+import { launchPackage } from './appList.js';
 
 // 回傳訊息字串供畫面顯示;成功開啟時回傳 ''。
-export async function openProvider(i) {
+export async function openProvider(i, custom) {
   const a = LAUNCH[i];
+  if (custom && custom.pkg) {
+    if (!Capacitor.isNativePlatform()) return custom.label + ': 只有安裝版 App 才能開啟';
+    return (await launchPackage(custom.pkg)) ? '' : custom.label + ': 無法開啟';
+  }
   if (!Capacitor.isNativePlatform()) return a.name + ': 只有安裝版 App 才能開啟';
   const target = a.androidPackage || a.url;
   if (!target) return a.name + ': 尚未設定套件名稱';

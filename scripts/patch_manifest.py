@@ -6,7 +6,7 @@ apps = pathlib.Path('src/apps.js').read_text(encoding='utf-8')
 pkgs = [p for p in re.findall(r"androidPackage:\s*'([^']+)'", apps) if p]
 mf = pathlib.Path('android/app/src/main/AndroidManifest.xml')
 xml = mf.read_text(encoding='utf-8')
-block = '    <queries>\n' + ''.join(f'        <package android:name="{p}" />\n' for p in pkgs) + '    </queries>\n'
+block = '    <queries>\n' + ''.join(f'        <package android:name="{p}" />\n' for p in pkgs) + '        <intent>\n            <action android:name="android.intent.action.MAIN" />\n            <category android:name="android.intent.category.LAUNCHER" />\n        </intent>\n    </queries>\n'
 if '<queries>' in xml:
     sys.exit('queries already present')
 xml = xml.replace('    <application', block + '    <application', 1)

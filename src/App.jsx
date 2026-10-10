@@ -37,6 +37,8 @@ function derive(hex, base) {
   });
 }
 const SWATCHES = ['#06C755', '#FFD21F', '#0070E0', '#FF4D6D', '#B26BFF', '#19D3DA', '#FF8A1F', '#E8ECF8'];
+// sparkle positions sit on a ring just outside the card edges: [left%, top%, delay ms, drift px]
+const RING = [[-7, 18, 0, -10], [-9, 58, 160, -12], [-4, 92, 320, -8], [12, 108, 90, -6], [38, 112, 380, 4], [66, 110, 220, 8], [92, 106, 40, 10], [108, 70, 300, 12], [106, 30, 140, 10], [96, -10, 420, 8], [70, -14, 260, 4], [40, -12, 60, -4], [14, -9, 360, -8]];
 const CARD_STYLES = ['Glass', 'Metal', 'Neon'];
 const DUST = [[8, 62, 0], [22, 20, 120], [36, 74, 240], [52, 30, 80], [66, 70, 300], [80, 24, 180], [14, 44, 360], [90, 56, 60], [44, 50, 420], [72, 40, 500]];
 function lsGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
@@ -47,7 +49,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, prevStyle: null, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.splashTimer = null;
     this.sw = null;
@@ -326,8 +328,11 @@ export default class App extends React.Component {
   setCardStyle(n) {
     lsSet('mpay.cardstyle.v1', n);
     if (this.dustTimer) clearTimeout(this.dustTimer);
-    this.setState({ cardStyle: n, styleTick: this.state.styleTick + 1, dustOn: true });
+    if (this.prevTimer) clearTimeout(this.prevTimer);
+    const old = this.state.cardStyle || 0;
+    this.setState({ prevStyle: n === old ? null : old, cardStyle: n, styleTick: this.state.styleTick + 1, dustOn: true });
     this.dustTimer = setTimeout(() => this.setState({ dustOn: false }), 1500);
+    this.prevTimer = setTimeout(() => this.setState({ prevStyle: null }), 900);
   }
 
   renameCard(i,value){const names=[...this.state.names];names[i]=value.slice(0,24);try{localStorage.setItem('mpay.names.v1',JSON.stringify(names))}catch(e){}this.setState({names});}
@@ -361,23 +366,23 @@ export default class App extends React.Component {
     const dx = st.dragX || 0;
     const prog = Math.min(1, dx / 150);
     const sx = st.swipeX || 0;
-    const look = (p, front) => {
+    const look = (p, front, sN = styleN) => {
       const rgb = p.rgb || hex2rgb(p.color);
       const light = lum(rgb) > 0.6;
       let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)';
       let fg = '#F2F4FF', sub = p.lite, face2 = '';
-      if (styleN === 1) {
+      if (sN === 1) {
         faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
         face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%),repeating-linear-gradient(100deg,rgba(255,255,255,.05) 0 2px,rgba(0,0,0,.05) 2px 4px)';
         fg = light ? '#10131C' : '#FFFFFF';
         sub = fg;
-      } else if (styleN === 2) {
+      } else if (sN === 2) {
         faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),#070A12';
         face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
         fg = p.lite;
         sub = p.lite;
       }
-      const faceShadow = styleN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (styleN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite);
+      const faceShadow = sN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (sN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite);
       return { faceBg, face2, fg, subCol: sub, faceShadow, glow: p.glow, styleKey: styleN + '-' + st.styleTick, dust: !!st.dustOn && front };
     };
     const cards = P.map((p, i) => {
@@ -404,7 +409,7 @@ export default class App extends React.Component {
       }
       const L = look(p, front);
       return {
-        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust,
+        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust, prev: (st.prevStyle != null ? look(p, front, st.prevStyle) : null),
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
@@ -516,7 +521,7 @@ export default class App extends React.Component {
       cards, tiles, radios, sw, shown, preview,
       spotColor: P[sel].glow,
       rootCls: (paying ? 'wc-paying' : '') + (st.customOpen ? ' wc-custom' : ''),
-      cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true); return Object.assign({}, L2, { name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
+      cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true); return Object.assign({}, L2, { prev: (st.prevStyle != null ? look(cp, true, st.prevStyle) : null), name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
       turnCls: paying ? 'wc-pin' : (st.payOut ? 'wc-pout' : ''),
       payTx: st.payTx || 0,
       payTy: st.payTy || 0,
@@ -553,19 +558,26 @@ export default class App extends React.Component {
     const Icon = ({ icon, d, size, stroke, sw, extra, radius }) => (icon
       ? <img src={icon} alt="" width={size} height={size} style={{ borderRadius: radius || Math.round(size * 0.24), flex: 'none', display: 'block' }} />
       : <Glyph d={d} size={size} stroke={stroke} sw={sw} extra={extra} />);
-    const face = (c) => (
-    <div key={c.styleKey} className="wc-face-in" style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + c.faceBg + ';box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease;color:' + c.fg)}>
-      {c.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: c.face2 }} />}
-      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: c.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
-      {c.dust && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}
-      <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
-        <div style={css('display:flex;justify-content:space-between;align-items:center')}>
-          <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + c.fg)}>{c.name}</span>
-          <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.subCol} sw={1.9} />
+    const faceBody = (c, L, cls, extraKey) => (
+      <div key={extraKey} className={cls} style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + L.faceBg + ';box-shadow:' + L.faceShadow + ';transition:box-shadow .5s ease;color:' + L.fg)}>
+        {L.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: L.face2 }} />}
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: L.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + L.glow + ',rgba(0,0,0,0) 62%)' }} />
+        <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
+          <div style={css('display:flex;justify-content:space-between;align-items:center')}>
+            <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + L.fg)}>{c.name}</span>
+            <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={L.subCol} sw={1.9} />
+          </div>
+          <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + L.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
         </div>
-        <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
       </div>
-    </div>
+    );
+    const face = (c) => (
+      <div style={css('position:absolute;inset:0')}>
+        <div aria-hidden="true" style={css('position:absolute;inset:0;border-radius:22px;background:#0A0D16')} />
+        {c.prev && faceBody(c, c.prev, 'wc-face-out', 'prev-' + c.styleKey)}
+        {faceBody(c, c, 'wc-face-in', c.styleKey)}
+        {c.dust && RING.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;--dx:' + d[3] + 'px;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}
+      </div>
     );
     const Glyph = ({ d, size, stroke, sw, extra }) => (
       <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...GLYPH_PROPS} stroke={stroke} strokeWidth={sw} style={extra}><path d={d} /></svg>

@@ -39,7 +39,7 @@ function derive(hex, base) {
 const SWATCHES = ['#06C755', '#FFD21F', '#0070E0', '#FF4D6D', '#B26BFF', '#19D3DA', '#FF8A1F', '#E8ECF8'];
 // sparkle positions sit on a ring just outside the card edges: [left%, top%, delay ms, drift px]
 const RING = [[-7, 18, 0, -10], [-9, 58, 160, -12], [-4, 92, 320, -8], [12, 108, 90, -6], [38, 112, 380, 4], [66, 110, 220, 8], [92, 106, 40, 10], [108, 70, 300, 12], [106, 30, 140, 10], [96, -10, 420, 8], [70, -14, 260, 4], [40, -12, 60, -4], [14, -9, 360, -8]];
-const CARD_STYLES = ['Glass', 'Metal', 'Neon'];
+const CARD_STYLES = ['Glass', 'Crystal', 'Matte', 'Steel'];
 const DUST = [[8, 62, 0], [22, 20, 120], [36, 74, 240], [52, 30, 80], [66, 70, 300], [80, 24, 180], [14, 44, 360], [90, 56, 60], [44, 50, 420], [72, 40, 500]];
 function lsGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -49,7 +49,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyles: (() => { const v = lsGet('mpay.cardstyles.v1', null); return Array.isArray(v) && v.length === 3 ? v : [0, 0, 0]; })(), styleTicks: [0, 0, 0], dustIdx: -1, prev: null, colorOpen: -1, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyles: (() => { const v = lsGet('mpay.cardstyles.v1', null); return Array.isArray(v) && v.length === 3 ? v : [0, 0, 0]; })(), styleTicks: [0, 0, 0], dustIdx: -1, prev: null, colorOpen: -1, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, flash: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.splashTimer = null;
     this.sw = null;
@@ -242,12 +242,13 @@ export default class App extends React.Component {
   finishPay() {
     const idx = this.state.sel;
     this.drag = null;
-    this.setState({ dragging: false, done: true, dragX: 320 });
+    this.setState({ dragging: false, done: true, dragX: 320, flash: true });
+    setTimeout(() => this.setState({ flash: false }), 1100);
     setTimeout(async () => {
       this.closePay();
       const msg = await openProvider(idx, this.state.targets[idx]);
       if (msg) this.showToast(msg);
-    }, 600);
+    }, 340);
   }
 
   showToast(msg) {
@@ -369,26 +370,39 @@ export default class App extends React.Component {
     const self = this;
     const paying = !!st.payOpen;
     const dx = st.dragX || 0;
-    const prog = Math.min(1, dx / 150);
+    const prog = Math.min(1, dx / 100);
     const sx = st.swipeX || 0;
     const look = (p, front, sN, ci) => {
       const rgb = p.rgb || hex2rgb(p.color);
-      const light = lum(rgb) > 0.6;
-      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),' + toHex(mix(rgb, [8, 10, 16], 0.84));
-      let fg = '#F2F4FF', sub = p.lite, face2 = '';
+      const W = [255, 255, 255], K = [0, 0, 0];
+      let faceBg, face2 = '', faceShadow, fg = '#F2F4FF', sub = p.lite, ink = 'rgba(255,255,255,.55)', sparkle = false, tint = 0.55;
       if (sN === 1) {
-        faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
-        face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%),repeating-linear-gradient(100deg,rgba(255,255,255,.05) 0 2px,rgba(0,0,0,.05) 2px 4px)';
-        fg = light ? '#10131C' : '#FFFFFF';
-        sub = fg;
+        // sapphire-style faceted crystal
+        const A = rgba(mix(rgb, W, 0.35), 0.34), B = rgba(mix(rgb, K, 0.5), 0.5), C = rgba(rgb, 0.4), D = rgba(mix(rgb, W, 0.65), 0.2);
+        faceBg = toHex(mix(rgb, K, 0.62));
+        face2 = 'conic-gradient(from 10deg at 26% 36%,' + A + ' 0 38deg,' + B + ' 38deg 92deg,' + C + ' 92deg 150deg,' + D + ' 150deg 215deg,' + B + ' 215deg 290deg,' + A + ' 290deg 360deg),'
+          + 'conic-gradient(from 200deg at 74% 64%,' + D + ' 0 52deg,' + B + ' 52deg 118deg,' + A + ' 118deg 190deg,' + C + ' 190deg 262deg,' + D + ' 262deg 360deg)';
+        faceShadow = 'inset 0 0 0 1px rgba(255,255,255,.4),inset 0 0 30px ' + rgba(rgb, 0.45) + ',0 0 14px -8px ' + p.lite;
+        fg = '#F4F8FF'; sparkle = true; tint = 0.25;
       } else if (sN === 2) {
-        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),' + toHex(mix(rgb, [6, 8, 14], 0.9));
-        face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
-        fg = p.lite;
-        sub = p.lite;
+        // matte black with a glossy arc band
+        faceBg = 'linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,0) 42%),' + toHex(mix(rgb, [10, 11, 14], 0.93));
+        face2 = 'radial-gradient(150% 135% at 6% 125%,rgba(0,0,0,0) 55%,rgba(255,255,255,.05) 56.5%,rgba(0,0,0,.7) 60%,rgba(255,255,255,.26) 62.6%,rgba(0,0,0,0) 64.5%)';
+        faceShadow = 'inset 0 0 0 1px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -12px 20px -12px rgba(0,0,0,.6),0 0 10px -7px ' + p.lite;
+        fg = '#EDEFF5'; ink = 'rgba(255,255,255,.42)'; tint = 0.35;
+      } else if (sN === 3) {
+        // brushed steel, tinted by the card color
+        faceBg = 'linear-gradient(120deg,#cdd2da 0%,#f4f6f9 26%,#b2b8c3 50%,#eef0f4 74%,#a1a8b4 100%)';
+        face2 = 'linear-gradient(' + rgba(rgb, 0.18) + ',' + rgba(rgb, 0.18) + '),repeating-linear-gradient(92deg,rgba(255,255,255,.22) 0 1px,rgba(40,46,58,.07) 1px 3px)';
+        faceShadow = 'inset 0 0 0 1px rgba(255,255,255,.75),inset 0 -10px 18px -10px rgba(0,0,0,.3),0 0 10px -7px ' + p.lite;
+        fg = '#171B24'; sub = '#2A303C'; ink = 'rgba(28,34,46,.5)'; tint = 0.12;
+      } else {
+        // clear smoked glass with beveled edge
+        faceBg = 'linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,0) 42%),' + toHex(mix(rgb, [8, 10, 16], 0.86));
+        face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 20%,rgba(255,255,255,.17) 29%,rgba(255,255,255,0) 37%),linear-gradient(112deg,rgba(255,255,255,0) 52%,rgba(255,255,255,.08) 60%,rgba(255,255,255,0) 68%)';
+        faceShadow = 'inset 0 0 0 1.5px rgba(255,255,255,.6),inset 0 0 0 5px rgba(255,255,255,.07),inset 0 -9px 16px -8px rgba(255,255,255,.4),0 0 10px -6px ' + p.lite;
       }
-      const faceShadow = sN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (sN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite);
-      return { faceBg, face2, fg, subCol: sub, faceShadow, glow: p.glow, styleKey: sN + '-' + st.styleTicks[ci], dust: st.dustIdx === ci };
+      return { faceBg, face2, fg, subCol: sub, ink, sparkle, tint, faceShadow, glow: p.glow, styleKey: sN + '-' + st.styleTicks[ci], dust: st.dustIdx === ci };
     };
     const cards = P.map((p, i) => {
       const m = (i - sel + 3) % 3;
@@ -402,7 +416,7 @@ export default class App extends React.Component {
         if (front) {
           extra = 'touch-action:none;cursor:grab;translate:' + dx + 'px 0;rotate:' + (dx * 0.03).toFixed(2) + 'deg;' + (st.done ? 'opacity:0;' : '');
           if (st.dragging) tr = 'none';
-          else if (st.done) tr = 'translate .55s cubic-bezier(.5,0,.9,.4),opacity .5s ease,rotate .55s ease';
+          else if (st.done) tr = 'translate .26s cubic-bezier(.4,0,1,.6),opacity .24s ease .04s,rotate .26s ease';
         } else {
           extra = 'opacity:0;translate:' + (o * 44) + 'px 0;pointer-events:none;';
         }
@@ -414,8 +428,8 @@ export default class App extends React.Component {
       }
       const L = look(p, front, st.cardStyles[i], i);
       return {
-        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust, prev: (st.prev && st.prev.i === i ? look(p, front, st.prev.style, i) : null),
-        domId: 'wc-card-' + i,
+        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, ink: L.ink, sparkle: L.sparkle, tint: L.tint, styleKey: L.styleKey, dust: L.dust, prev: (st.prev && st.prev.i === i ? look(p, front, st.prev.style, i) : null),
+        domId: 'wc-card-' + i, idx: i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
         faceShadow: L.faceShadow,
@@ -434,15 +448,21 @@ export default class App extends React.Component {
         },
         move: (e) => {
           if (!self.drag) return;
-          self.queue({ dragX: Math.max(0, Math.min(260, self.px(e.clientX - self.drag.x0))) });
+          const dxv = Math.max(0, Math.min(260, self.px(e.clientX - self.drag.x0)));
+          const now = performance.now();
+          if (self.drag.t != null && now > self.drag.t) self.drag.v = (dxv - self.drag.lx) / (now - self.drag.t);
+          self.drag.t = now; self.drag.lx = dxv; self.drag.dx = dxv;
+          const el = document.getElementById('wc-card-' + i);
+          if (el) { el.style.translate = dxv + 'px 0'; el.style.rotate = (dxv * 0.03).toFixed(2) + 'deg'; }
+          const pr = Math.min(1, dxv / 100);
+          const bar = document.getElementById('wc-prog'); if (bar) bar.style.width = Math.round(pr * 100) + '%';
+          const gl = document.getElementById('wc-glow-' + i); if (gl) gl.style.opacity = (0.35 + 0.65 * pr).toFixed(2);
         },
         up: () => {
           if (!self.drag) return;
-          self.drag = null;
-          const dxNow = (self.pending && self.pending.dragX != null) ? self.pending.dragX : (self.state.dragX || 0);
-          if (self.pendRaf) { cancelAnimationFrame(self.pendRaf); self.pendRaf = null; }
-          self.pending = null;
-          if (dxNow > 130) self.finishPay();
+          const d = self.drag; self.drag = null;
+          const dxNow = d.dx || 0;
+          if (dxNow > 90 || (dxNow > 36 && (d.v || 0) > 0.6)) { self.setState({ dragX: dxNow }, () => self.finishPay()); }
           else self.setState({ dragging: false, dragX: 0 });
         },
         key: (e) => {
@@ -520,10 +540,12 @@ export default class App extends React.Component {
     }));
     const pp = P[sel], prgb = pp.rgb || hex2rgb(pp.color);
     const preview = { name: st.names[sel] || pp.name, color: pp.color, lite: pp.lite, edge: pp.edge, hi: toHex(mix(prgb, [255, 255, 255], 0.35)), lo: toHex(mix(prgb, [0, 0, 0], 0.55)), soft: rgba(prgb, 0.3), grid: rgba(prgb, 0.14), light: lum(prgb) > 0.6 };
+    const tci = st.customIdx || 0;
+    const thumbs = CARD_STYLES.map((nm, n) => { const T = look(P[tci], true, n, tci); return { nm, n, bg: T.faceBg, ov: T.face2, sh: T.faceShadow, fg: T.fg, ink: T.ink, on: (st.cardStyles[tci] || 0) === n }; });
     const q = (st.q || '').trim().toLowerCase();
     const shown = (st.apps || []).filter((a) => !q || a.label.toLowerCase().includes(q));
     return {
-      cards, tiles, radios, sw, shown, preview,
+      cards, tiles, radios, sw, shown, preview, thumbs,
       spotColor: P[sel].glow,
       rootCls: (paying ? 'wc-paying' : '') + (st.customOpen ? ' wc-custom' : ''),
       cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true, st.cardStyles[ci], ci); return Object.assign({}, L2, { prev: (st.prev && st.prev.i === ci ? look(cp, true, st.prev.style, ci) : null), name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
@@ -566,13 +588,31 @@ export default class App extends React.Component {
     const faceBody = (c, L, cls, extraKey) => (
       <div key={extraKey} className={cls} style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + L.faceBg + ';box-shadow:' + L.faceShadow + ';transition:box-shadow .5s ease;color:' + L.fg)}>
         {L.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: L.face2 }} />}
-        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: L.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + L.glow + ',rgba(0,0,0,0) 62%)' }} />
-        <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: L.tint, background: 'radial-gradient(110% 90% at 0% 0%,' + L.glow + ',rgba(0,0,0,0) 62%)' }} />
+        <svg aria-hidden="true" viewBox="0 0 290 184" width="100%" height="100%" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0 }} fill="none">
+          <defs>
+            <linearGradient id="wcChip" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e9e6df" /><stop offset=".5" stopColor="#b9b4aa" /><stop offset="1" stopColor="#d8d4cb" /></linearGradient>
+          </defs>
+          <path d="M138 -4 C 196 34, 246 92, 296 112" stroke={L.ink} strokeWidth=".9" opacity=".8" />
+          {[34, 44, 54, 64, 74, 84, 94].map((r) => <circle key={r} cx="296" cy="196" r={r} stroke={L.ink} strokeWidth=".6" opacity=".55" />)}
+          <g transform="translate(22 68)">
+            <rect width="36" height="28" rx="6" fill="url(#wcChip)" stroke="rgba(0,0,0,.35)" strokeWidth=".8" />
+            <path d="M0 9h36M0 19h36M13 0v28M23 0v28" stroke="rgba(60,56,48,.55)" strokeWidth=".8" />
+          </g>
+          <g transform="translate(250 90)" stroke={L.ink} strokeWidth="1.6" strokeLinecap="round" opacity=".9">
+            <path d="M0 -6a8 8 0 0 1 0 12" /><path d="M5 -10a13 13 0 0 1 0 20" /><path d="M10 -14a18 18 0 0 1 0 28" />
+          </g>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((k) => <circle key={k} cx={26 + k * 11} cy="152" r="1.8" fill={L.ink} />)}
+        </svg>
+        {L.sparkle && [[70, 18, 0], [86, 56, 900], [38, 72, 1700]].map((q, k) => (
+          <svg key={k} aria-hidden="true" className="wc-star" width="20" height="20" viewBox="-10 -10 20 20" style={{ position: 'absolute', left: q[0] + '%', top: q[1] + '%', animationDelay: q[2] + 'ms' }}><path d="M0 -9L1.6 -1.6L9 0L1.6 1.6L0 9L-1.6 1.6L-9 0L-1.6 -1.6Z" fill="#fff" /></svg>
+        ))}
+        <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px')}>
           <div style={css('display:flex;justify-content:space-between;align-items:center')}>
             <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + L.fg)}>{c.name}</span>
             <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={L.subCol} sw={1.9} />
           </div>
-          <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + L.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
+          <span style={css('position:absolute;right:20px;bottom:14px;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + L.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
         </div>
       </div>
     );
@@ -616,7 +656,7 @@ export default class App extends React.Component {
                       <div className={'wc-turn ' + v.turnCls} style={css('position:absolute;inset:0;transform-style:preserve-3d;--tx:' + v.payTx + 'px;--ty:' + v.payTy + 'px')}>
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
-                            <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
+                            <div id={'wc-glow-' + c.idx} aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
                             {face(c)}
                           </button>
                         ))}
@@ -686,9 +726,15 @@ export default class App extends React.Component {
             <Glyph d="M15 5l-7 7 7 7" size={22} stroke="currentColor" sw={2.2} />
           </button>
 
+          {this.state.flash && (
+            <div aria-hidden="true" style={css('position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.44) + 'px;height:0;pointer-events:none;z-index:20')}>
+              <div className="wc-flash" style={{ background: 'radial-gradient(circle,#fff 0%,' + v.spotColor + ' 30%,rgba(0,0,0,0) 68%)' }} />
+              <div className="wc-pop" style={{ borderColor: v.selColor }}><Glyph d="M5 12.5l4.2 4.2L19 7" size={30} stroke="#fff" sw={2.8} /></div>
+            </div>
+          )}
           <div style={css('position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:14px;' + v.hintStyle)}>
             <div aria-hidden="true" style={css('width:240px;height:6px;border-radius:3px;background:rgba(255,255,255,.16);overflow:hidden')}>
-              <div style={{ height: '100%', width: v.progressPct + '%', borderRadius: 3, background: v.selColor }} />
+              <div id="wc-prog" style={{ height: '100%', width: v.progressPct + '%', borderRadius: 3, background: v.selColor }} />
             </div>
             <div style={css('display:flex;align-items:center;gap:8px;color:#E6E9F5;font-size:15px;font-weight:500')}>
               Swipe the card right to pay
@@ -702,7 +748,7 @@ export default class App extends React.Component {
           <div className={'wc-clayer' + (this.state.customOpen ? ' on' : '')} aria-hidden={!this.state.customOpen}>
             <button type="button" onClick={() => this.closeCustom()} className="wc-tap wc-cin" style={css('position:absolute;right:18px;top:52px;height:40px;padding:0 18px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.55)')}>Done</button>
 
-            <div className="wc-cin" onPointerDown={(e) => { this.cs = { x0: e.clientX }; }} onPointerUp={(e) => { const w = this.cs; this.cs = null; if (!w) return; const dx = this.px(e.clientX - w.x0); if (Math.abs(dx) > 40) this.setCardStyle(this.state.customIdx, ((this.state.cardStyles[this.state.customIdx] || 0) + (dx < 0 ? 1 : -1) + 3) % 3); }} style={css('touch-action:pan-y;position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.15) + 'px;height:290px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
+            <div className="wc-cin" onPointerDown={(e) => { this.cs = { x0: e.clientX }; }} onPointerUp={(e) => { const w = this.cs; this.cs = null; if (!w) return; const dx = this.px(e.clientX - w.x0); if (Math.abs(dx) > 40) this.setCardStyle(this.state.customIdx, ((this.state.cardStyles[this.state.customIdx] || 0) + (dx < 0 ? 1 : -1) + 4) % 4); }} style={css('touch-action:pan-y;position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.15) + 'px;height:290px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
               <div className="wc-float" style={css('position:relative;width:290px;height:184px;transform-style:preserve-3d')}>
                 <div className="wc-cspot" style={{ background: 'radial-gradient(closest-side,' + v.cface.glowc + ',rgba(0,0,0,0) 72%)' }} />
                 <div style={css('position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(10deg) rotateY(-14deg) rotateZ(-2deg) scale(1.12)')}>
@@ -753,23 +799,16 @@ export default class App extends React.Component {
                       <button type="button" aria-label="Back" onClick={() => this.setState({ customPane: 'main' })} className="wc-tap" style={css('width:40px;height:40px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)')}><Glyph d="M15 5l-7 7 7 7" size={20} stroke="currentColor" sw={2.2} /></button>
                       <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>Card style</span>
                     </div>
-                    <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
-                      {CARD_STYLES.map((nm, n) => {
-                        const pv = v.preview;
-                        const on = (this.state.cardStyles[this.state.customIdx] || 0) === n;
-                        let bg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)', ov = '', bd = 'inset 0 0 0 1px ' + pv.edge, fgc = '#F2F4FF';
-                        if (n === 1) { bg = 'linear-gradient(135deg,' + pv.hi + ' 0%,' + pv.color + ' 38%,' + pv.lo + ' 100%)'; ov = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%)'; bd = 'inset 0 0 0 1px rgba(255,255,255,.45)'; fgc = pv.light ? '#10131C' : '#FFFFFF'; }
-                        if (n === 2) { bg = 'radial-gradient(120% 90% at 100% 0%,' + pv.soft + ',rgba(0,0,0,0) 60%),#070A12'; ov = 'repeating-linear-gradient(0deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px),repeating-linear-gradient(90deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px)'; bd = 'inset 0 0 0 1.5px ' + pv.color + ',inset 0 0 18px ' + pv.soft; fgc = pv.lite; }
-                        return (
-                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(this.state.customIdx, n)} className="wc-tap" style={css('border:0;padding:0;background:none;color:#F2F4FF;display:flex;flex-direction:column;gap:7px;align-items:center')}>
-                            <div style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:14px;overflow:hidden;background:' + bg + ';box-shadow:' + bd + (on ? ',0 0 0 2px rgba(242,244,255,.9),0 0 18px -2px ' + pv.color : '') + ';color:' + fgc)}>
-                              {ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: ov }} />}
-                              <span style={css("position:absolute;left:8px;top:7px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:11px;color:" + fgc)}>{pv.name}</span>
-                            </div>
-                            <span style={css('font-size:13px;font-weight:700;color:' + (on ? '#FFFFFF' : '#9AA0B8'))}>{nm}</span>
-                          </button>
-                        );
-                      })}
+                    <div style={css('display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px')}>
+                      {v.thumbs.map((t) => (
+                        <button key={t.nm} type="button" aria-pressed={t.on} onClick={() => this.setCardStyle(this.state.customIdx, t.n)} className="wc-tap" style={css('border:0;padding:0;background:none;color:#F2F4FF;display:flex;flex-direction:column;gap:7px;align-items:center')}>
+                          <div style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:10px;overflow:hidden;background:' + t.bg + ';box-shadow:' + t.sh + (t.on ? ',0 0 0 2px rgba(242,244,255,.9)' : '') + ';color:' + t.fg)}>
+                            {t.ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: t.ov }} />}
+                            <span aria-hidden="true" style={css('position:absolute;left:14%;top:38%;width:20%;height:24%;border-radius:2px;background:linear-gradient(135deg,#e9e6df,#b9b4aa)')} />
+                          </div>
+                          <span style={css('font-size:12px;font-weight:700;color:' + (t.on ? '#FFFFFF' : '#9AA0B8'))}>{t.nm}</span>
+                        </button>
+                      ))}
                     </div>
                     <div style={css('text-align:center;font-size:12px;color:#9AA0B8')}>Swipe the card left or right, or tap a style</div>
                   </>

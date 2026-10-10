@@ -28,7 +28,7 @@ export async function listShortcuts(pkg) {
 export async function launchShortcut(pkg, sc) {
   if (!native()) return false;
   try {
-    await AppList.launchShortcut({ package: pkg, action: sc.action, data: sc.data, targetPackage: sc.targetPackage, targetClass: sc.targetClass });
+    await AppList.launchShortcut({ package: pkg, action: sc.action, data: sc.data, targetPackage: sc.targetPackage, targetClass: sc.targetClass, noPackage: !!sc.preset });
     return true;
   } catch (e) { return false; }
 }

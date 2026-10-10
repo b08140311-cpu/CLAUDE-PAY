@@ -2,6 +2,7 @@ import React from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { openProvider } from './launch.js';
 import { listApps, listShortcuts, loadTargets, saveTargets } from './appList.js';
+import { presetsFor } from './apps.js';
 
 // "a:b;c:d" -> React style object
 function css(str) {
@@ -260,7 +261,11 @@ export default class App extends React.Component {
   async loadShortcuts(pkg) {
     if (!pkg) { this.setState({ shortcuts: [], scLoading: false }); return; }
     this.setState({ scLoading: true, shortcuts: [] });
-    const list = await listShortcuts(pkg);
+    const slot = this.state.pickSlot;
+    const found = await listShortcuts(pkg);
+    const pre = presetsFor(pkg, slot);
+    const ids = new Set(pre.map((x) => x.id));
+    const list = pre.concat(found.filter((x) => !ids.has(x.id)));
     if ((this.state.targets[this.state.pickSlot] || {}).pkg === pkg) this.setState({ shortcuts: list, scLoading: false });
   }
 

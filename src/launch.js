@@ -16,14 +16,23 @@ export async function openProvider(i, custom) {
     return (await launchPackage(custom.pkg)) ? '' : custom.label + ': 無法開啟';
   }
   if (!Capacitor.isNativePlatform()) return a.name + ': 只有安裝版 App 才能開啟';
-  const target = a.androidPackage || a.url;
-  if (!target) return a.name + ': 尚未設定套件名稱';
   try {
-    const { value } = await AppLauncher.canOpenUrl({ url: target });
-    if (value) {
-      await AppLauncher.openUrl({ url: target });
-      return '';
+    // 1) 先試預設的 deep link(直接開到付款碼等頁面)
+    if (a.url) {
+      try {
+        const r = await AppLauncher.openUrl({ url: a.url });
+        if (r && r.completed) return '';
+      } catch (e) {}
     }
+    // 2) 退回開啟 App 本身
+    if (a.androidPackage) {
+      const { value } = await AppLauncher.canOpenUrl({ url: a.androidPackage });
+      if (value) {
+        await AppLauncher.openUrl({ url: a.androidPackage });
+        return '';
+      }
+    }
+    // 3) 沒安裝,前往商店
     if (a.store) await AppLauncher.openUrl({ url: a.store });
     return a.name + ': 尚未安裝,已前往商店';
   } catch (e) {

@@ -162,7 +162,7 @@ public class AppListPlugin extends Plugin {
             Intent in = new Intent(action != null ? action : Intent.ACTION_VIEW);
             if (data != null) in.setData(Uri.parse(data));
             if (tc != null) in.setClassName(tp != null ? tp : pkg, tc);
-            else in.setPackage(pkg);
+            else if (!call.getBoolean("noPackage", false)) in.setPackage(pkg);
             in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(in);
             call.resolve();

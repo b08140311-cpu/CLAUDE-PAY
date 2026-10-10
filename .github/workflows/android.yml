@@ -29,6 +29,24 @@ jobs:
       - name: Build web app
         run: npm run build
 
+      - name: Build faithful standalone HTML preview
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path('dist/index.html').read_text()
+          for path in sorted(Path('dist/assets').glob('*.css')):
+              html = re.sub(r'<link[^>]+href="/assets/'+re.escape(path.name)+r'"[^>]*>', lambda m:'<style>'+path.read_text()+'</style>',html)
+          for path in sorted(Path('dist/assets').glob('*.js')):
+              html = re.sub(r'<script[^>]+src="/assets/'+re.escape(path.name)+r'"[^>]*></script>',lambda m:'<script>'+path.read_text()+'</script>',html)
+          Path('MPay-original-ui-preview.html').write_text(html)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpay-faithful-html-preview
+          path: MPay-original-ui-preview.html
+
       - name: Add Android platform
         run: npx cap add android
 
@@ -58,4 +76,4 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk pay-hub.apk
           gh release delete latest --cleanup-tag --yes || true
-          gh release create latest pay-hub.apk --title "Pay Hub (latest)" --notes "Debug APK built from ${GITHUB_SHA::7}" --latest
+          gh release create latest pay-hub.apk MPay-original-ui-preview.html --title "Pay Hub (latest)" --notes "Debug APK built from ${GITHUB_SHA::7}" --latest

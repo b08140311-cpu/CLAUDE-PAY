@@ -110,7 +110,7 @@ export default class App extends React.Component {
       let dir = 0;
       if (Math.abs(v) > 0.16) dir = v > 0 ? 1 : -1;
       else if (Math.abs(dy) > h * 0.10) dir = dy > 0 ? 1 : -1;
-      this.animateTo(clamp(start + dir) * h, 1850);
+      this.animateTo(clamp(start + dir) * h, 1350);
     };
     this.onWheel = (e) => {
       if (this.state.pickOpen) return;
@@ -124,7 +124,7 @@ export default class App extends React.Component {
       const h = H();
       const cur = Math.round(sc.scrollTop / h);
       this.wheelLocked = true;
-      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1850);
+      this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1350);
     };
     this.onScroll = () => {
       if (this.animating || this.touching) return;
@@ -178,12 +178,12 @@ export default class App extends React.Component {
     const from = sc.scrollTop;
     const dist = top - from;
     if (Math.abs(dist) < 1) { sc.scrollTop = top; return; }
-    const norm = 1 - Math.exp(-6.4);
+    const norm = 1 - Math.exp(-4.5);
     const t0 = performance.now();
     this.animating = true;
     const step = (now) => {
       const t = Math.min(1, (now - t0) / dur);
-      const e = (1 - Math.exp(-6.4 * t)) / norm;
+      const e = (1 - Math.exp(-4.5 * t)) / norm;
       sc.scrollTop = from + dist * e;
       if (t < 1) {
         this.raf = requestAnimationFrame(step);
@@ -332,7 +332,7 @@ export default class App extends React.Component {
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
-        faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4)' + (paying && front ? ',0 0 ' + Math.round(26 + prog * 50) + 'px ' + Math.round(-2 + prog * 10) + 'px ' + p.glow : ''),
+        faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + '' + (paying && front ? ',0 0 ' + Math.round(26 + prog * 50) + 'px ' + Math.round(-2 + prog * 10) + 'px ' + p.glow : ''),
         pick: () => {
           if (self.state.payOpen) return;
           self.sw = null;

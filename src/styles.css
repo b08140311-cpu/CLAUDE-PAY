@@ -87,3 +87,8 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .mpay-wordmark{font-family:'Sora',system-ui,sans-serif;font-size:62px;font-weight:700;letter-spacing:-.09em;transform:skew(-8deg);color:white;text-shadow:0 0 32px rgba(255,255,255,.13)}
 .mpay-wordmark span{color:#70A8FF}.mpay-signature{font-size:9px;letter-spacing:.52em;color:#7A8293;margin-left:13px}
 @keyframes mpay-reveal{0%{opacity:1}73%{opacity:1}100%{opacity:0}}
+
+/* Ultra-subtle edge light; original Claude Pay layout preserved. */
+.wc-liquid{opacity:.34;}
+.wc-blob{filter:blur(15px);animation-duration:32s !important;will-change:auto;}
+.wc-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior-y:none;}

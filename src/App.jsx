@@ -23,12 +23,31 @@ function css(str) {
   return o;
 }
 
+// ---- color theming ----
+const hex2rgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(h || ''); if (!m) return [6, 199, 85]; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const rgba = (c, a) => 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+const mix = (c, t, k) => c.map((v, i) => Math.round(v + (t[i] - v) * k));
+const toHex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+const lum = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+function derive(hex, base) {
+  const c = hex2rgb(hex);
+  return Object.assign({}, base, {
+    color: hex, lite: toHex(mix(c, [255, 255, 255], 0.28)), glow: rgba(c, 0.38), edge: rgba(c, 0.5),
+    gA: rgba(c, 0.72), gB: rgba(c, 0.3), rgb: c
+  });
+}
+const SWATCHES = ['#06C755', '#FFD21F', '#0070E0', '#FF4D6D', '#B26BFF', '#19D3DA', '#FF8A1F', '#E8ECF8'];
+const CARD_STYLES = ['Glass', 'Metal', 'Neon'];
+const DUST = [[8, 62, 0], [22, 20, 120], [36, 74, 240], [52, 30, 80], [66, 70, 300], [80, 24, 180], [14, 44, 360], [90, 56, 60], [44, 50, 420], [72, 40, 500]];
+function lsGet(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
 const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' };
 
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.splashTimer = null;
     this.sw = null;
@@ -288,6 +307,20 @@ export default class App extends React.Component {
     this.setState({ targets: t });
   }
 
+  setColor(i, hex) {
+    const c = this.state.colors.slice();
+    c[i] = hex;
+    lsSet('mpay.colors.v1', c);
+    this.setState({ colors: c });
+  }
+
+  setCardStyle(n) {
+    lsSet('mpay.cardstyle.v1', n);
+    if (this.dustTimer) clearTimeout(this.dustTimer);
+    this.setState({ cardStyle: n, styleTick: this.state.styleTick + 1, dustOn: true });
+    this.dustTimer = setTimeout(() => this.setState({ dustOn: false }), 1500);
+  }
+
   renameCard(i,value){const names=[...this.state.names];names[i]=value.slice(0,24);try{localStorage.setItem('mpay.names.v1',JSON.stringify(names))}catch(e){}this.setState({names});}
 
   pickSlotTo(i) {
@@ -312,7 +345,8 @@ export default class App extends React.Component {
   renderVals() {
     const st = this.state;
     const sel = st.sel || 0;
-    const P = this.P;
+    const P = this.P.map((p, i) => (st.colors[i] ? derive(st.colors[i], p) : p));
+    const styleN = st.cardStyle || 0;
     const self = this;
     const paying = !!st.payOpen;
     const dx = st.dragX || 0;
@@ -340,11 +374,28 @@ export default class App extends React.Component {
         if (front) extra = 'translate:' + Math.round(sx * 0.8) + 'px 0;rotate:' + (sx * 0.04).toFixed(2) + 'deg;';
         tr = 'transform .9s cubic-bezier(.2,.8,.2,1),opacity .6s ease,translate 0s,rotate 0s';
       }
+      const rgb = p.rgb || hex2rgb(p.color);
+      const light = lum(rgb) > 0.6;
+      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)';
+      let fg = '#F2F4FF', sub = p.lite, face2 = '';
+      if (styleN === 1) {
+        faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
+        face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%),repeating-linear-gradient(100deg,rgba(255,255,255,.05) 0 2px,rgba(0,0,0,.05) 2px 4px)';
+        fg = light ? '#10131C' : '#FFFFFF';
+        sub = fg;
+      } else if (styleN === 2) {
+        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),#070A12';
+        face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
+        fg = p.lite;
+        sub = p.lite;
+      }
       return {
+        faceBg, face2, fg, subCol: sub, styleKey: styleN + '-' + st.styleTick, dust: st.dustOn && front,
+        neon: styleN === 2 ? 'inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color : '',
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
-        faceShadow: 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + '',
+        faceShadow: styleN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (styleN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + ''),
         glowOp: paying && front ? 0.35 + 0.65 * prog : 0,
         pick: () => {
           if (self.state.payOpen) return;
@@ -433,6 +484,7 @@ export default class App extends React.Component {
     }));
     const radios = P.map((p, i) => ({
       icon: (st.targets[i] && st.targets[i].icon) || '',
+      color: p.color,
       name: st.names[i] || p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
       on: i === sel,
       status: (st.targets[i] ? '→ ' + st.targets[i].label + (st.targets[i].shortcut ? ' · ' + st.targets[i].shortcut.label : '') : (i === sel ? 'Default' : 'Tap to make default')),
@@ -443,10 +495,12 @@ export default class App extends React.Component {
       tick: i === sel ? 1 : 0,
       pick: () => self.setState({ sel: i })
     }));
+    const pp = P[sel], prgb = pp.rgb || hex2rgb(pp.color);
+    const preview = { name: st.names[sel] || pp.name, color: pp.color, lite: pp.lite, edge: pp.edge, hi: toHex(mix(prgb, [255, 255, 255], 0.35)), lo: toHex(mix(prgb, [0, 0, 0], 0.55)), soft: rgba(prgb, 0.3), grid: rgba(prgb, 0.14), light: lum(prgb) > 0.6 };
     const q = (st.q || '').trim().toLowerCase();
     const shown = (st.apps || []).filter((a) => !q || a.label.toLowerCase().includes(q));
     return {
-      cards, tiles, radios, sw, shown,
+      cards, tiles, radios, sw, shown, preview,
       spotColor: P[sel].glow,
       rootCls: paying ? 'wc-paying' : '',
       turnCls: paying ? 'wc-pin' : (st.payOut ? 'wc-pout' : ''),
@@ -519,14 +573,16 @@ export default class App extends React.Component {
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
                             <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
-                            <div style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66);box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease')}>
-                              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
+                            <div key={c.styleKey} className="wc-face-in" style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + c.faceBg + ';box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease;color:' + c.fg)}>
+                              {c.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: c.face2 }} />}
+                              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: c.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
+                              {c.dust && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}
                               <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
                                 <div style={css('display:flex;justify-content:space-between;align-items:center')}>
-                                  <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px")}>{c.name}</span>
-                                  <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.lite} sw={1.9} />
+                                  <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + c.fg)}>{c.name}</span>
+                                  <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.subCol} sw={1.9} />
                                 </div>
-                                <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.lite + ';opacity:' + c.subOp)}>{c.sub}</span>
+                                <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
                               </div>
                             </div>
                           </button>
@@ -564,20 +620,58 @@ export default class App extends React.Component {
                   <h2 style={css("margin:0 4px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:24px;letter-spacing:-.01em")}>Default app</h2>
                   <p style={css('margin:0 4px 8px;font-size:15px;line-height:1.45;color:#9AA0B8')}>The main button opens this one first.</p>
                   <div role="radiogroup" aria-label="Default payment app" style={css('display:flex;flex-direction:column;gap:12px')}>
-                    {v.radios.map((d) => (
-                      <button key={d.name} type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
-                        <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
-                          <Icon icon={d.icon} d={d.glyph} size={d.icon ? 36 : 22} stroke="currentColor" sw={2} />
+                    {v.radios.map((d, i) => (
+                      <div key={d.name} style={css('display:flex;flex-direction:column;gap:8px')}>
+                        <div style={css('position:relative')}>
+                          <button type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('width:100%;display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
+                            <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
+                              <Icon icon={d.icon} d={d.glyph} size={d.icon ? 36 : 22} stroke="currentColor" sw={2} />
+                            </div>
+                            <div style={css('display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;padding-right:46px')}>
+                              <span style={css('font-size:17px;font-weight:700;line-height:1.2')}>{d.name}</span>
+                              <span style={css('font-size:14px;font-weight:500;color:#9AA0B8;line-height:1.3')}>{d.status}</span>
+                            </div>
+                            <div aria-hidden="true" style={css('width:28px;height:28px;border-radius:50%;box-sizing:border-box;border:2px solid ' + d.ring + ';background:' + d.fill + ';display:flex;align-items:center;justify-content:center;flex:none')}>
+                              <Glyph d="M5 12l5 5L19 7" size={16} stroke="#05060A" sw={3.2} extra={{ opacity: d.tick }} />
+                            </div>
+                          </button>
+                          <button type="button" aria-label={d.name + ' color'} onClick={() => this.setState({ colorOpen: this.state.colorOpen === i ? -1 : i })} className="wc-tap" style={css('position:absolute;right:56px;top:50%;margin-top:-17px;width:34px;height:34px;border-radius:17px;border:0;background:' + d.color + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.85),0 0 14px -2px ' + d.color)} />
                         </div>
-                        <div style={css('display:flex;flex-direction:column;gap:2px;flex:1;min-width:0')}>
-                          <span style={css('font-size:17px;font-weight:700;line-height:1.2')}>{d.name}</span>
-                          <span style={css('font-size:14px;font-weight:500;color:#9AA0B8;line-height:1.3')}>{d.status}</span>
+                        <div className={'wc-swatches' + (this.state.colorOpen === i ? ' on' : '')}>
+                          <div style={css('display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 4px 4px')}>
+                            {SWATCHES.map((h) => (
+                              <button key={h} type="button" aria-label={h} onClick={() => this.setColor(i, h)} className="wc-tap" style={css('width:30px;height:30px;border-radius:15px;border:0;background:' + h + ';box-shadow:inset 0 0 0 ' + (d.color.toLowerCase() === h.toLowerCase() ? '3px #fff' : '1px rgba(255,255,255,.4)'))} />
+                            ))}
+                            <label className="wc-tap" style={css('position:relative;width:30px;height:30px;border-radius:15px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);background:conic-gradient(#f55,#fd3,#3e5,#3cf,#a5f,#f55);display:block')}>
+                              <input type="color" value={d.color} onChange={(e) => this.setColor(i, e.target.value)} aria-label={d.name + ' custom color'} style={css('position:absolute;inset:-8px;width:50px;height:50px;opacity:0;cursor:pointer')} />
+                            </label>
+                            <button type="button" onClick={() => this.setColor(i, null)} className="wc-tap" style={css('height:30px;padding:0 12px;border-radius:15px;border:0;background:rgba(255,255,255,.12);color:#E6E9F5;font-size:12px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)')}>預設</button>
+                          </div>
                         </div>
-                        <div aria-hidden="true" style={css('width:28px;height:28px;border-radius:50%;box-sizing:border-box;border:2px solid ' + d.ring + ';background:' + d.fill + ';display:flex;align-items:center;justify-content:center;flex:none')}>
-                          <Glyph d="M5 12l5 5L19 7" size={16} stroke="#05060A" sw={3.2} extra={{ opacity: d.tick }} />
-                        </div>
-                      </button>
+                      </div>
                     ))}
+                  </div>
+                  <div style={css('display:flex;flex-direction:column;gap:8px;margin-top:4px')}>
+                    <span style={css('margin:0 4px;font-size:13px;font-weight:700;color:#C5CCE0;letter-spacing:.04em')}>Card style</span>
+                    <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
+                      {CARD_STYLES.map((nm, n) => {
+                        const pv = v.preview;
+                        const on = this.state.cardStyle === n;
+                        let bg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)', ov = '', bd = 'inset 0 0 0 1px ' + pv.edge, fgc = '#F2F4FF';
+                        if (n === 1) { bg = 'linear-gradient(135deg,' + pv.hi + ' 0%,' + pv.color + ' 38%,' + pv.lo + ' 100%)'; ov = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%)'; bd = 'inset 0 0 0 1px rgba(255,255,255,.45)'; fgc = pv.light ? '#10131C' : '#FFFFFF'; }
+                        if (n === 2) { bg = 'radial-gradient(120% 90% at 100% 0%,' + pv.soft + ',rgba(0,0,0,0) 60%),#070A12'; ov = 'repeating-linear-gradient(0deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px),repeating-linear-gradient(90deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px)'; bd = 'inset 0 0 0 1.5px ' + pv.color + ',inset 0 0 18px ' + pv.soft; fgc = pv.lite; }
+                        return (
+                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(n)} className="wc-tap" style={css('position:relative;border:0;padding:0;background:none;color:#F2F4FF;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center')}>
+                            <div key={on ? 'on-' + this.state.styleTick : 'off'} className={on ? 'wc-face-in' : ''} style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:14px;overflow:hidden;background:' + bg + ';box-shadow:' + bd + (on ? ',0 0 0 2px rgba(242,244,255,.9),0 0 18px -2px ' + pv.color : '') + ';color:' + fgc)}>
+                              {ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: ov }} />}
+                              <span style={css("position:absolute;left:8px;top:7px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:11px;color:" + fgc)}>{pv.name}</span>
+                              {on && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + (n === 1 ? fgc : pv.lite) + ';box-shadow:0 0 8px 1px ' + pv.lite)} />)}
+                            </div>
+                            <span style={css('font-size:12px;font-weight:700;color:' + (on ? '#FFFFFF' : '#9AA0B8'))}>{nm}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <p style={css('margin:6px 4px 0;font-size:13px;line-height:1.45;color:#9AA0B8')}>Balances and history stay inside each app.</p>
                 </div>

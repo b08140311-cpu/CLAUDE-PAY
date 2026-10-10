@@ -107,3 +107,22 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-bg{animation-duration:16s;will-change:opacity;transform:translateZ(0)}
 .wc-spot{will-change:opacity}
 .wc-turn,.wc-float{will-change:transform}
+
+/* ---- card styles: fade + fly-in + sparkle dust ---- */
+@keyframes wcFaceIn{
+  0%{opacity:0;transform:translate3d(0,22px,-50px) scale(.93)}
+  60%{opacity:1}
+  100%{opacity:1;transform:none}
+}
+@keyframes wcDust{
+  0%{opacity:0;transform:translate3d(0,6px,0) scale(.4)}
+  25%{opacity:.95}
+  100%{opacity:0;transform:translate3d(var(--dx,6px),-34px,0) scale(1)}
+}
+.wc-face-in{animation:wcFaceIn .75s cubic-bezier(.2,.8,.2,1) both}
+.wc-dust{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:wcDust 1.2s ease-out both;animation-delay:var(--d,0ms);will-change:transform,opacity}
+.wc-dust:nth-child(odd){--dx:-8px;width:3px;height:3px}
+.wc-swatches{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .35s cubic-bezier(.2,.8,.2,1),opacity .3s ease}
+.wc-swatches>div{overflow:hidden;min-height:0}
+.wc-swatches.on{grid-template-rows:1fr;opacity:1}
+@media (prefers-reduced-motion:reduce){.wc-face-in,.wc-dust{animation:none}}

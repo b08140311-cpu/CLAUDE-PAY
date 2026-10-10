@@ -47,7 +47,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
+    this.state = { colors: (() => { const v = lsGet('mpay.colors.v1', null); return Array.isArray(v) && v.length === 3 ? v : [null, null, null]; })(), cardStyle: lsGet('mpay.cardstyle.v1', 0), styleTick: 0, dustOn: false, colorOpen: -1, customOpen: false, customPane: 'main', customIdx: 0, splash:true, names:(()=>{try{const v=JSON.parse(localStorage.getItem('mpay.names.v1'));return Array.isArray(v)&&v.length===3?v:['LINE Pay','PX Pay','PayPal']}catch(e){return ['LINE Pay','PX Pay','PayPal']}})(), sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.splashTimer = null;
     this.sw = null;
@@ -87,7 +87,7 @@ export default class App extends React.Component {
     this.touching = false;
     this.settleTimer = null;
     this.onTS = (e) => {
-      if (this.state.payOpen || this.state.pickOpen) return;
+      if (this.state.payOpen || this.state.pickOpen || this.state.customOpen) return;
       this.touching = true;
       this.cancelAnim();
       const t = e.touches[0];
@@ -134,6 +134,7 @@ export default class App extends React.Component {
     this.onWheel = (e) => {
       if (this.state.pickOpen) return;
       e.preventDefault();
+      if (this.state.customOpen) return;
       if (this.state.payOpen) return;
       const now = performance.now();
       const gap = now - this.lastWheel;
@@ -146,7 +147,7 @@ export default class App extends React.Component {
       this.animateTo(clamp(cur + (e.deltaY > 0 ? 1 : -1)) * h, 1350);
     };
     this.onScroll = () => {
-      if (this.animating || this.touching) return;
+      if (this.animating || this.touching || this.state.customOpen) return;
       if (this.settleTimer) clearTimeout(this.settleTimer);
       this.settleTimer = setTimeout(() => {
         if (this.animating || this.touching) return;
@@ -257,6 +258,7 @@ export default class App extends React.Component {
   handleBack() {
     const st = this.state;
     if (st.exitAsk) { this.setState({ exitAsk: false }); return; }
+    if (st.customOpen) { if (st.customPane !== 'main') this.setState({ customPane: 'main' }); else this.closeCustom(); return; }
     if (st.pickOpen) { this.setState({ pickOpen: false }); return; }
     if (st.payOpen) { this.closePay(); return; }
     const sc = this.sc || document.getElementById('wc-scroller');
@@ -307,6 +309,13 @@ export default class App extends React.Component {
     this.setState({ targets: t });
   }
 
+  openCustom(i) {
+    if (this.state.payOpen) return;
+    this.setState({ sel: i, customOpen: true, customPane: 'main', customIdx: i });
+  }
+
+  closeCustom() { this.setState({ customOpen: false, customPane: 'main' }); }
+
   setColor(i, hex) {
     const c = this.state.colors.slice();
     c[i] = hex;
@@ -352,6 +361,25 @@ export default class App extends React.Component {
     const dx = st.dragX || 0;
     const prog = Math.min(1, dx / 150);
     const sx = st.swipeX || 0;
+    const look = (p, front) => {
+      const rgb = p.rgb || hex2rgb(p.color);
+      const light = lum(rgb) > 0.6;
+      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)';
+      let fg = '#F2F4FF', sub = p.lite, face2 = '';
+      if (styleN === 1) {
+        faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
+        face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%),repeating-linear-gradient(100deg,rgba(255,255,255,.05) 0 2px,rgba(0,0,0,.05) 2px 4px)';
+        fg = light ? '#10131C' : '#FFFFFF';
+        sub = fg;
+      } else if (styleN === 2) {
+        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),#070A12';
+        face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
+        fg = p.lite;
+        sub = p.lite;
+      }
+      const faceShadow = styleN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (styleN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite);
+      return { faceBg, face2, fg, subCol: sub, faceShadow, glow: p.glow, styleKey: styleN + '-' + st.styleTick, dust: !!st.dustOn && front };
+    };
     const cards = P.map((p, i) => {
       const m = (i - sel + 3) % 3;
       const o = m === 0 ? 0 : (m === 1 ? 1 : -1);
@@ -374,28 +402,13 @@ export default class App extends React.Component {
         if (front) extra = 'translate:' + Math.round(sx * 0.8) + 'px 0;rotate:' + (sx * 0.04).toFixed(2) + 'deg;';
         tr = 'transform .9s cubic-bezier(.2,.8,.2,1),opacity .6s ease,translate 0s,rotate 0s';
       }
-      const rgb = p.rgb || hex2rgb(p.color);
-      const light = lum(rgb) > 0.6;
-      let faceBg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)';
-      let fg = '#F2F4FF', sub = p.lite, face2 = '';
-      if (styleN === 1) {
-        faceBg = 'linear-gradient(135deg,' + toHex(mix(rgb, [255, 255, 255], 0.35)) + ' 0%,' + p.color + ' 38%,' + toHex(mix(rgb, [0, 0, 0], 0.55)) + ' 100%)';
-        face2 = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%),repeating-linear-gradient(100deg,rgba(255,255,255,.05) 0 2px,rgba(0,0,0,.05) 2px 4px)';
-        fg = light ? '#10131C' : '#FFFFFF';
-        sub = fg;
-      } else if (styleN === 2) {
-        faceBg = 'radial-gradient(120% 90% at 100% 0%,' + rgba(rgb, 0.28) + ',rgba(0,0,0,0) 60%),#070A12';
-        face2 = 'repeating-linear-gradient(0deg,' + rgba(rgb, 0.1) + ' 0 1px,rgba(0,0,0,0) 1px 14px),repeating-linear-gradient(90deg,' + rgba(rgb, 0.08) + ' 0 1px,rgba(0,0,0,0) 1px 14px)';
-        fg = p.lite;
-        sub = p.lite;
-      }
+      const L = look(p, front);
       return {
-        faceBg, face2, fg, subCol: sub, styleKey: styleN + '-' + st.styleTick, dust: st.dustOn && front,
-        neon: styleN === 2 ? 'inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color : '',
+        faceBg: L.faceBg, face2: L.face2, fg: L.fg, subCol: L.subCol, styleKey: L.styleKey, dust: L.dust,
         domId: 'wc-card-' + i,
         icon: (st.targets[i] && st.targets[i].icon) || '', name: st.names[i] || p.name, sub: p.sub, lite: p.lite, glow: p.glow, glyph: p.glyph, subOp: front ? 0.85 : 0,
         aria: p.name + (front ? ', selected. Press to pay' : ', bring to front'),
-        faceShadow: styleN === 2 ? ('inset 0 0 0 1.5px ' + p.color + ',inset 0 0 26px ' + rgba(rgb, 0.35) + ',0 0 20px -6px ' + p.color) : (styleN === 1 ? 'inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -14px 24px -10px rgba(0,0,0,.35),0 0 12px -8px ' + p.lite : 'inset 0 0 0 1px ' + p.edge + ',inset 0 1px 0 rgba(255,255,255,.4),0 0 8px -5px ' + p.lite + ',0 0 18px -14px ' + p.lite + ''),
+        faceShadow: L.faceShadow,
         glowOp: paying && front ? 0.35 + 0.65 * prog : 0,
         pick: () => {
           if (self.state.payOpen) return;
@@ -493,7 +506,7 @@ export default class App extends React.Component {
       ring: i === sel ? p.lite : 'rgba(255,255,255,.3)',
       fill: i === sel ? p.lite : 'transparent',
       tick: i === sel ? 1 : 0,
-      pick: () => self.setState({ sel: i })
+      pick: () => self.openCustom(i)
     }));
     const pp = P[sel], prgb = pp.rgb || hex2rgb(pp.color);
     const preview = { name: st.names[sel] || pp.name, color: pp.color, lite: pp.lite, edge: pp.edge, hi: toHex(mix(prgb, [255, 255, 255], 0.35)), lo: toHex(mix(prgb, [0, 0, 0], 0.55)), soft: rgba(prgb, 0.3), grid: rgba(prgb, 0.14), light: lum(prgb) > 0.6 };
@@ -502,7 +515,8 @@ export default class App extends React.Component {
     return {
       cards, tiles, radios, sw, shown, preview,
       spotColor: P[sel].glow,
-      rootCls: paying ? 'wc-paying' : '',
+      rootCls: (paying ? 'wc-paying' : '') + (st.customOpen ? ' wc-custom' : ''),
+      cface: (() => { const ci = st.customIdx || 0; const cp = P[ci]; const L2 = look(cp, true); return Object.assign({}, L2, { name: st.names[ci] || cp.name, sub: cp.sub, subOp: 0.85, glyph: cp.glyph, icon: (st.targets[ci] && st.targets[ci].icon) || '', idx: ci, color: cp.color, glowc: cp.glow }); })(),
       turnCls: paying ? 'wc-pin' : (st.payOut ? 'wc-pout' : ''),
       payTx: st.payTx || 0,
       payTy: st.payTy || 0,
@@ -539,6 +553,20 @@ export default class App extends React.Component {
     const Icon = ({ icon, d, size, stroke, sw, extra, radius }) => (icon
       ? <img src={icon} alt="" width={size} height={size} style={{ borderRadius: radius || Math.round(size * 0.24), flex: 'none', display: 'block' }} />
       : <Glyph d={d} size={size} stroke={stroke} sw={sw} extra={extra} />);
+    const face = (c) => (
+    <div key={c.styleKey} className="wc-face-in" style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + c.faceBg + ';box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease;color:' + c.fg)}>
+      {c.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: c.face2 }} />}
+      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: c.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
+      {c.dust && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}
+      <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
+        <div style={css('display:flex;justify-content:space-between;align-items:center')}>
+          <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + c.fg)}>{c.name}</span>
+          <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.subCol} sw={1.9} />
+        </div>
+        <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
+      </div>
+    </div>
+    );
     const Glyph = ({ d, size, stroke, sw, extra }) => (
       <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...GLYPH_PROPS} stroke={stroke} strokeWidth={sw} style={extra}><path d={d} /></svg>
     );
@@ -573,18 +601,7 @@ export default class App extends React.Component {
                         {v.cards.map((c) => (
                           <button key={c.domId} id={c.domId} type="button" aria-label={c.aria} onClick={c.pick} onPointerDown={c.down} onPointerMove={c.move} onPointerUp={c.up} onPointerCancel={c.up} onKeyDown={c.key} style={css('position:absolute;inset:0;padding:0;border:0;background:none;text-align:left;color:#F2F4FF;' + c.style)}>
                             <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 64px 4px ' + c.glow, opacity: c.glowOp, transition: 'opacity .35s ease', pointerEvents: 'none' }} />
-                            <div key={c.styleKey} className="wc-face-in" style={css('position:absolute;inset:0;border-radius:22px;overflow:hidden;background:' + c.faceBg + ';box-shadow:' + c.faceShadow + ';transition:box-shadow .5s ease;color:' + c.fg)}>
-                              {c.face2 && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: c.face2 }} />}
-                              <div aria-hidden="true" style={{ position: 'absolute', inset: 0, opacity: c.face2 ? 0.35 : 1, background: 'radial-gradient(110% 90% at 0% 0%,' + c.glow + ',rgba(0,0,0,0) 62%)' }} />
-                              {c.dust && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + c.subCol + ';box-shadow:0 0 8px 1px ' + c.subCol)} />)}
-                              <div style={css('position:absolute;inset:0;box-sizing:border-box;padding:16px 20px 18px;display:flex;flex-direction:column;justify-content:space-between')}>
-                                <div style={css('display:flex;justify-content:space-between;align-items:center')}>
-                                  <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;color:" + c.fg)}>{c.name}</span>
-                                  <Icon icon={c.icon} d={c.glyph} size={c.icon ? 34 : 24} stroke={c.subCol} sw={1.9} />
-                                </div>
-                                <span style={css('font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:' + c.subCol + ';opacity:' + c.subOp)}>{c.sub}</span>
-                              </div>
-                            </div>
+                            {face(c)}
                           </button>
                         ))}
                       </div>
@@ -612,68 +629,33 @@ export default class App extends React.Component {
 
             <section id="wc-default" className="wc-snap">
               <div className="wc-page" style={css('position:relative;height:100%;box-sizing:border-box;padding:96px 20px 150px;display:flex;flex-direction:column;justify-content:center')}>
-                <button type="button" aria-label="Choose apps to open" onClick={() => this.openPicker()} className="wc-tap" style={css('position:absolute;right:20px;bottom:142px;height:48px;padding:0 18px;border-radius:24px;border:0;display:flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.34),rgba(255,255,255,.14));color:#FFFFFF;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.65)')}>
+                <div className="wc-outbound" style={css('--ox:90px;--oy:150px;position:absolute;right:20px;bottom:142px')}>
+                <button type="button" aria-label="Choose apps to open" onClick={() => this.openPicker()} className="wc-tap" style={css('position:static;height:48px;padding:0 18px;border-radius:24px;border:0;display:flex;align-items:center;gap:8px;background:linear-gradient(145deg,rgba(255,255,255,.34),rgba(255,255,255,.14));color:#FFFFFF;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),inset 0 1px 0 rgba(255,255,255,.65)')}>
                   <Glyph d="M4 6h16M4 12h16M4 18h10" size={18} stroke="currentColor" sw={2.2} />
                   Choose apps
                 </button>
+                </div>
                 <div className="wc-rise" style={css('--amp:90px;display:flex;flex-direction:column;gap:14px')}>
-                  <h2 style={css("margin:0 4px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:24px;letter-spacing:-.01em")}>Default app</h2>
-                  <p style={css('margin:0 4px 8px;font-size:15px;line-height:1.45;color:#9AA0B8')}>The main button opens this one first.</p>
+                  <h2 className="wc-outbound" style={css("--ox:0px;--oy:-130px;margin:0 4px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:24px;letter-spacing:-.01em")}>Default app</h2>
+                  <p className="wc-outbound" style={css('--ox:0px;--oy:-120px;margin:0 4px 8px;font-size:15px;line-height:1.45;color:#9AA0B8')}>The main button opens this one first.</p>
                   <div role="radiogroup" aria-label="Default payment app" style={css('display:flex;flex-direction:column;gap:12px')}>
                     {v.radios.map((d, i) => (
-                      <div key={d.name} style={css('display:flex;flex-direction:column;gap:8px')}>
-                        <div style={css('position:relative')}>
-                          <button type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('width:100%;display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
-                            <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
-                              <Icon icon={d.icon} d={d.glyph} size={d.icon ? 36 : 22} stroke="currentColor" sw={2} />
-                            </div>
-                            <div style={css('display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;padding-right:46px')}>
-                              <span style={css('font-size:17px;font-weight:700;line-height:1.2')}>{d.name}</span>
-                              <span style={css('font-size:14px;font-weight:500;color:#9AA0B8;line-height:1.3')}>{d.status}</span>
-                            </div>
-                            <div aria-hidden="true" style={css('width:28px;height:28px;border-radius:50%;box-sizing:border-box;border:2px solid ' + d.ring + ';background:' + d.fill + ';display:flex;align-items:center;justify-content:center;flex:none')}>
-                              <Glyph d="M5 12l5 5L19 7" size={16} stroke="#05060A" sw={3.2} extra={{ opacity: d.tick }} />
-                            </div>
-                          </button>
-                          <button type="button" aria-label={d.name + ' color'} onClick={() => this.setState({ colorOpen: this.state.colorOpen === i ? -1 : i })} className="wc-tap" style={css('position:absolute;right:56px;top:50%;margin-top:-17px;width:34px;height:34px;border-radius:17px;border:0;background:' + d.color + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.85),0 0 14px -2px ' + d.color)} />
-                        </div>
-                        <div className={'wc-swatches' + (this.state.colorOpen === i ? ' on' : '')}>
-                          <div style={css('display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:2px 4px 4px')}>
-                            {SWATCHES.map((h) => (
-                              <button key={h} type="button" aria-label={h} onClick={() => this.setColor(i, h)} className="wc-tap" style={css('width:30px;height:30px;border-radius:15px;border:0;background:' + h + ';box-shadow:inset 0 0 0 ' + (d.color.toLowerCase() === h.toLowerCase() ? '3px #fff' : '1px rgba(255,255,255,.4)'))} />
-                            ))}
-                            <label className="wc-tap" style={css('position:relative;width:30px;height:30px;border-radius:15px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);background:conic-gradient(#f55,#fd3,#3e5,#3cf,#a5f,#f55);display:block')}>
-                              <input type="color" value={d.color} onChange={(e) => this.setColor(i, e.target.value)} aria-label={d.name + ' custom color'} style={css('position:absolute;inset:-8px;width:50px;height:50px;opacity:0;cursor:pointer')} />
-                            </label>
-                            <button type="button" onClick={() => this.setColor(i, null)} className="wc-tap" style={css('height:30px;padding:0 12px;border-radius:15px;border:0;background:rgba(255,255,255,.12);color:#E6E9F5;font-size:12px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)')}>預設</button>
+                      <div key={d.name} className="wc-outbound" style={css('--ox:0px;--oy:' + ((i - 1) * 120) + 'px')}>
+                        <button type="button" role="radio" aria-checked={d.on} onClick={d.pick} className="wc-tap" style={css('width:100%;display:flex;align-items:center;gap:14px;min-height:72px;box-sizing:border-box;padding:12px 16px;border-radius:22px;border:0;background:' + d.bg + ';color:#F2F4FF;text-align:left;box-shadow:inset 0 0 0 1px ' + d.edge + ',inset 0 1px 0 rgba(255,255,255,.35)')}>
+                          <div aria-hidden="true" style={css('width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,' + d.gA + ',' + d.gB + ');color:' + d.lite + ';box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;flex:none')}>
+                            <Icon icon={d.icon} d={d.glyph} size={d.icon ? 36 : 22} stroke="currentColor" sw={2} />
                           </div>
-                        </div>
+                          <div style={css('display:flex;flex-direction:column;gap:2px;flex:1;min-width:0')}>
+                            <span style={css('font-size:17px;font-weight:700;line-height:1.2')}>{d.name}</span>
+                            <span style={css('font-size:14px;font-weight:500;color:#9AA0B8;line-height:1.3')}>{d.status}</span>
+                          </div>
+                          <div aria-hidden="true" style={css('width:12px;height:12px;border-radius:6px;background:' + d.color + ';box-shadow:0 0 12px -1px ' + d.color + ';flex:none')} />
+                          <Glyph d="M9 6l6 6-6 6" size={18} stroke="#9AA0B8" sw={2.2} />
+                        </button>
                       </div>
                     ))}
                   </div>
-                  <div style={css('display:flex;flex-direction:column;gap:8px;margin-top:4px')}>
-                    <span style={css('margin:0 4px;font-size:13px;font-weight:700;color:#C5CCE0;letter-spacing:.04em')}>Card style</span>
-                    <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
-                      {CARD_STYLES.map((nm, n) => {
-                        const pv = v.preview;
-                        const on = this.state.cardStyle === n;
-                        let bg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)', ov = '', bd = 'inset 0 0 0 1px ' + pv.edge, fgc = '#F2F4FF';
-                        if (n === 1) { bg = 'linear-gradient(135deg,' + pv.hi + ' 0%,' + pv.color + ' 38%,' + pv.lo + ' 100%)'; ov = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%)'; bd = 'inset 0 0 0 1px rgba(255,255,255,.45)'; fgc = pv.light ? '#10131C' : '#FFFFFF'; }
-                        if (n === 2) { bg = 'radial-gradient(120% 90% at 100% 0%,' + pv.soft + ',rgba(0,0,0,0) 60%),#070A12'; ov = 'repeating-linear-gradient(0deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px),repeating-linear-gradient(90deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px)'; bd = 'inset 0 0 0 1.5px ' + pv.color + ',inset 0 0 18px ' + pv.soft; fgc = pv.lite; }
-                        return (
-                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(n)} className="wc-tap" style={css('position:relative;border:0;padding:0;background:none;color:#F2F4FF;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center')}>
-                            <div key={on ? 'on-' + this.state.styleTick : 'off'} className={on ? 'wc-face-in' : ''} style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:14px;overflow:hidden;background:' + bg + ';box-shadow:' + bd + (on ? ',0 0 0 2px rgba(242,244,255,.9),0 0 18px -2px ' + pv.color : '') + ';color:' + fgc)}>
-                              {ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: ov }} />}
-                              <span style={css("position:absolute;left:8px;top:7px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:11px;color:" + fgc)}>{pv.name}</span>
-                              {on && DUST.map((d, k) => <span key={k} className="wc-dust" style={css('left:' + d[0] + '%;top:' + d[1] + '%;--d:' + d[2] + 'ms;background:' + (n === 1 ? fgc : pv.lite) + ';box-shadow:0 0 8px 1px ' + pv.lite)} />)}
-                            </div>
-                            <span style={css('font-size:12px;font-weight:700;color:' + (on ? '#FFFFFF' : '#9AA0B8'))}>{nm}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <p style={css('margin:6px 4px 0;font-size:13px;line-height:1.45;color:#9AA0B8')}>Balances and history stay inside each app.</p>
+                  <p className="wc-outbound" style={css('--ox:0px;--oy:140px;margin:6px 4px 0;font-size:13px;line-height:1.45;color:#9AA0B8')}>Balances and history stay inside each app.</p>
                 </div>
               </div>
             </section>
@@ -699,6 +681,86 @@ export default class App extends React.Component {
             <button type="button" onClick={v.cancelPay} className="wc-tap" style={css('min-height:44px;padding:0 24px;border-radius:22px;border:0;background:rgba(255,255,255,.2);color:#FFFFFF;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.55)')}>Cancel</button>
           </div>
 
+
+
+          <div className={'wc-clayer' + (this.state.customOpen ? ' on' : '')} aria-hidden={!this.state.customOpen}>
+            <div className="wc-cspot" style={{ background: 'radial-gradient(closest-side,' + v.cface.glowc + ',rgba(0,0,0,0) 72%)' }} />
+            <button type="button" onClick={() => this.closeCustom()} className="wc-tap wc-cin" style={css('position:absolute;right:18px;top:52px;height:40px;padding:0 18px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),inset 0 1px 0 rgba(255,255,255,.55)')}>Done</button>
+
+            <div className="wc-cin" onPointerDown={(e) => { this.cs = { x0: e.clientX }; }} onPointerUp={(e) => { const w = this.cs; this.cs = null; if (!w) return; const dx = this.px(e.clientX - w.x0); if (Math.abs(dx) > 40) this.setCardStyle(((this.state.cardStyle || 0) + (dx < 0 ? 1 : -1) + 3) % 3); }} style={css('touch-action:pan-y;position:absolute;left:0;right:0;top:' + Math.round(this.state.H * 0.15) + 'px;height:290px;perspective:1100px;display:flex;align-items:center;justify-content:center')}>
+              <div className="wc-float" style={css('position:relative;width:290px;height:184px;transform-style:preserve-3d')}>
+                <div style={css('position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(10deg) rotateY(-14deg) rotateZ(-2deg) scale(1.12)')}>
+                  <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: 22, boxShadow: '0 0 70px 6px ' + v.cface.glowc, opacity: 0.55 }} />
+                  <div style={css('position:absolute;inset:0')}>{face(v.cface)}</div>
+                </div>
+              </div>
+              <div aria-hidden="true" className="wc-cshadow" style={{ background: 'radial-gradient(closest-side,' + v.cface.glowc + ',rgba(0,0,0,0))' }} />
+            </div>
+
+            <div className="wc-cin wc-cpanel" style={css('--cd:.34s;position:absolute;left:20px;right:20px;top:' + Math.round(this.state.H * 0.15 + 300) + 'px;display:flex;flex-direction:column;gap:12px')}>
+              <div key={this.state.customPane} className="wc-face-in" style={css('display:flex;flex-direction:column;gap:12px')}>
+                {this.state.customPane === 'main' && (
+                  <>
+                    <div style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:20px;text-align:center;margin-bottom:2px")}>{v.cface.name}</div>
+                    <button type="button" onClick={() => this.setState({ customPane: 'color' })} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:68px;padding:0 18px;border:0;border-radius:22px;color:#F2F4FF;text-align:left;background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.08));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.4)')}>
+                      <span aria-hidden="true" style={css('width:34px;height:34px;border-radius:17px;flex:none;background:' + v.cface.color + ';box-shadow:inset 0 0 0 2px rgba(255,255,255,.85),0 0 16px -2px ' + v.cface.color)} />
+                      <span style={css('flex:1;font-size:17px;font-weight:700')}>Color</span>
+                      <Glyph d="M9 6l6 6-6 6" size={18} stroke="#9AA0B8" sw={2.2} />
+                    </button>
+                    <button type="button" onClick={() => this.setState({ customPane: 'style' })} className="wc-tap" style={css('display:flex;align-items:center;gap:14px;min-height:68px;padding:0 18px;border:0;border-radius:22px;color:#F2F4FF;text-align:left;background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.08));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 1px 0 rgba(255,255,255,.4)')}>
+                      <span aria-hidden="true" style={css('width:34px;height:22px;border-radius:6px;flex:none;background:linear-gradient(135deg,' + v.preview.hi + ',' + v.preview.color + ' 45%,' + v.preview.lo + ');box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)')} />
+                      <span style={css('flex:1;font-size:17px;font-weight:700')}>Card style<span style={css('display:block;font-size:13px;font-weight:500;color:#9AA0B8;margin-top:1px')}>{CARD_STYLES[this.state.cardStyle || 0]}</span></span>
+                      <Glyph d="M9 6l6 6-6 6" size={18} stroke="#9AA0B8" sw={2.2} />
+                    </button>
+                  </>
+                )}
+                {this.state.customPane === 'color' && (
+                  <>
+                    <div style={css('display:flex;align-items:center;gap:10px')}>
+                      <button type="button" aria-label="Back" onClick={() => this.setState({ customPane: 'main' })} className="wc-tap" style={css('width:40px;height:40px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)')}><Glyph d="M15 5l-7 7 7 7" size={20} stroke="currentColor" sw={2.2} /></button>
+                      <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>Color</span>
+                    </div>
+                    <div style={css('display:grid;grid-template-columns:repeat(5,1fr);gap:12px;justify-items:center;padding:6px 2px')}>
+                      {SWATCHES.map((h) => (
+                        <button key={h} type="button" aria-label={h} onClick={() => this.setColor(v.cface.idx, h)} className="wc-tap" style={css('width:46px;height:46px;border-radius:23px;border:0;background:' + h + ';box-shadow:inset 0 0 0 ' + (v.cface.color.toLowerCase() === h.toLowerCase() ? '3px #fff' : '1px rgba(255,255,255,.4)') + ',0 0 16px -4px ' + h)} />
+                      ))}
+                      <label className="wc-tap" style={css('position:relative;width:46px;height:46px;border-radius:23px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5);background:conic-gradient(#f55,#fd3,#3e5,#3cf,#a5f,#f55);display:block')}>
+                        <input type="color" value={v.cface.color} onChange={(e) => this.setColor(v.cface.idx, e.target.value)} aria-label="Custom color" style={css('position:absolute;inset:-8px;width:62px;height:62px;opacity:0;cursor:pointer')} />
+                      </label>
+                    </div>
+                    <button type="button" onClick={() => this.setColor(v.cface.idx, null)} className="wc-tap" style={css('align-self:center;height:38px;padding:0 20px;border-radius:19px;border:0;background:rgba(255,255,255,.12);color:#E6E9F5;font-size:13px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)')}>Reset to default</button>
+                  </>
+                )}
+                {this.state.customPane === 'style' && (
+                  <>
+                    <div style={css('display:flex;align-items:center;gap:10px')}>
+                      <button type="button" aria-label="Back" onClick={() => this.setState({ customPane: 'main' })} className="wc-tap" style={css('width:40px;height:40px;border-radius:20px;border:0;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4)')}><Glyph d="M15 5l-7 7 7 7" size={20} stroke="currentColor" sw={2.2} /></button>
+                      <span style={css("font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:18px")}>Card style</span>
+                    </div>
+                    <div style={css('display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px')}>
+                      {CARD_STYLES.map((nm, n) => {
+                        const pv = v.preview;
+                        const on = (this.state.cardStyle || 0) === n;
+                        let bg = 'linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 42%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.03)),rgba(10,12,18,.66)', ov = '', bd = 'inset 0 0 0 1px ' + pv.edge, fgc = '#F2F4FF';
+                        if (n === 1) { bg = 'linear-gradient(135deg,' + pv.hi + ' 0%,' + pv.color + ' 38%,' + pv.lo + ' 100%)'; ov = 'linear-gradient(112deg,rgba(255,255,255,0) 28%,rgba(255,255,255,.38) 44%,rgba(255,255,255,0) 58%)'; bd = 'inset 0 0 0 1px rgba(255,255,255,.45)'; fgc = pv.light ? '#10131C' : '#FFFFFF'; }
+                        if (n === 2) { bg = 'radial-gradient(120% 90% at 100% 0%,' + pv.soft + ',rgba(0,0,0,0) 60%),#070A12'; ov = 'repeating-linear-gradient(0deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px),repeating-linear-gradient(90deg,' + pv.grid + ' 0 1px,rgba(0,0,0,0) 1px 10px)'; bd = 'inset 0 0 0 1.5px ' + pv.color + ',inset 0 0 18px ' + pv.soft; fgc = pv.lite; }
+                        return (
+                          <button key={nm} type="button" aria-pressed={on} onClick={() => this.setCardStyle(n)} className="wc-tap" style={css('border:0;padding:0;background:none;color:#F2F4FF;display:flex;flex-direction:column;gap:7px;align-items:center')}>
+                            <div style={css('position:relative;width:100%;aspect-ratio:1.6/1;border-radius:14px;overflow:hidden;background:' + bg + ';box-shadow:' + bd + (on ? ',0 0 0 2px rgba(242,244,255,.9),0 0 18px -2px ' + pv.color : '') + ';color:' + fgc)}>
+                              {ov && <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: ov }} />}
+                              <span style={css("position:absolute;left:8px;top:7px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:11px;color:" + fgc)}>{pv.name}</span>
+                            </div>
+                            <span style={css('font-size:13px;font-weight:700;color:' + (on ? '#FFFFFF' : '#9AA0B8'))}>{nm}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={css('text-align:center;font-size:12px;color:#9AA0B8')}>Swipe the card left or right, or tap a style</div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className={'wc-sheet' + (this.state.pickOpen ? ' on' : '')} onClick={() => this.setState({ pickOpen: false })}>
             <div className="wc-sheet-panel" onClick={(e) => e.stopPropagation()} style={css('box-sizing:border-box;height:640px;padding:20px 16px 24px;border-radius:28px 28px 0 0;background:linear-gradient(180deg,rgba(40,60,120,.55),rgba(8,12,28,.9));-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 1px rgba(255,255,255,.14);display:flex;flex-direction:column;gap:12px')}>

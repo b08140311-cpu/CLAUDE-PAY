@@ -2,7 +2,10 @@
 
 LINE Pay / PX Pay / PayPal 的整合啟動介面。只是一個介面,實際付款、餘額、紀錄都在各自的 App 內。
 
-## 取得 APK
+## 一鍵下載 APK
+手機瀏覽器開:https://github.com/b08140311-cpu/CLAUDE-PAY/releases/latest/download/pay-hub.apk
+
+## 其他取得方式
 1. 把這個專案推到 GitHub(main 分支)。
 2. 到 repo 的 **Actions** 分頁 → **Build Android APK** → 點最新一次執行。
 3. 頁面下方 **Artifacts** 下載 `pay-hub-debug-apk`,解壓縮得到 `app-debug.apk`。

@@ -1,0 +1,6 @@
+{
+  "appId": "com.payhub.app",
+  "appName": "Pay Hub",
+  "webDir": "dist",
+  "backgroundColor": "#000000"
+}

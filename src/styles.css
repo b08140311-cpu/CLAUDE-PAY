@@ -1,0 +1,73 @@
+html,body,#app{margin:0;height:100%;background:#000;overflow:hidden;-webkit-tap-highlight-color:transparent}
+#fit{position:fixed;left:50%;top:50%;width:390px;height:844px;transform-origin:center center}
+button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
+.wc-root{timeline-scope:--wcs;isolation:isolate}
+.wc-scroll{scrollbar-width:none;overscroll-behavior:contain;scroll-timeline:--wcs block}
+.wc-scroll::-webkit-scrollbar{display:none}
+.wc-snap{height:100%;box-sizing:border-box}
+
+@keyframes wcPage{
+  0%{opacity:0;transform:scale(.8);filter:blur(12px)}
+  42%,58%{opacity:1;transform:scale(1);filter:blur(0)}
+  100%{opacity:0;transform:scale(1.22);filter:blur(12px)}
+}
+@keyframes wcRise{
+  0%{transform:translateY(var(--amp,100px))}
+  45%,55%{transform:none}
+  100%{transform:translateY(calc(var(--amp,100px) * -1))}
+}
+@keyframes wcTurn{
+  from{transform:rotateX(14deg) rotateY(-22deg) rotateZ(-3deg) scale(1)}
+  to{transform:rotateX(4deg) rotateY(34deg) rotateZ(6deg) scale(.78)}
+}
+@keyframes wcFloat{0%,100%{transform:translateY(0) rotateZ(-.6deg)}50%{transform:translateY(-10px) rotateZ(.6deg)}}
+@keyframes wcBob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+@keyframes wcToast{0%{opacity:0;transform:translateY(10px)}12%,85%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-6px)}}
+@keyframes wcDotIn{from{height:6px;opacity:.3}to{height:22px;opacity:1}}
+@keyframes wcDotOut{from{height:22px;opacity:1}to{height:6px;opacity:.3}}
+@keyframes wcBlob{
+  0%{transform:translate(0,0) rotate(0deg) scale(1);border-radius:60% 40% 55% 45%/50% 60% 40% 50%;filter:hue-rotate(0deg)}
+  25%{transform:translate(calc(var(--bx,40px) * 2.4),calc(var(--by,-50px) * 1.6)) rotate(90deg) scale(1.3);border-radius:42% 58% 38% 62%/62% 38% 56% 44%;filter:hue-rotate(30deg)}
+  50%{transform:translate(calc(var(--bx,40px) * -1.4),calc(var(--by2,60px) * 2.2)) rotate(180deg) scale(.78);border-radius:58% 42% 62% 38%/40% 58% 42% 60%;filter:hue-rotate(60deg)}
+  75%{transform:translate(calc(var(--bx,40px) * 1.2),calc(var(--by,-50px) * -1.8)) rotate(270deg) scale(1.2);border-radius:46% 54% 44% 56%/56% 44% 60% 40%;filter:hue-rotate(30deg)}
+  100%{transform:translate(0,0) rotate(360deg) scale(1);border-radius:60% 40% 55% 45%/50% 60% 40% 50%;filter:hue-rotate(0deg)}
+}
+@keyframes wcPayIn{
+  0%{transform:translate3d(0,0,0) rotateX(14deg) rotateY(-22deg) rotateZ(-3deg) scale(1)}
+  100%{transform:translate3d(var(--tx,0px),var(--ty,0px),0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.25)}
+}
+@keyframes wcPayOut{
+  0%{transform:translate3d(var(--tx,0px),var(--ty,0px),0) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.25)}
+  100%{transform:translate3d(0,0,0) rotateX(14deg) rotateY(-22deg) rotateZ(-3deg) scale(1)}
+}
+@keyframes wcPulse{0%,100%{opacity:.3}50%{opacity:1}}
+.wc-bg{z-index:-1;position:absolute;inset:0;pointer-events:none;animation:wcPulse 9s ease-in-out infinite;background:radial-gradient(120% 60% at 50% 105%,rgba(24,80,230,.6),rgba(0,0,0,0) 70%),radial-gradient(90% 45% at 15% 0%,rgba(10,50,170,.45),rgba(0,0,0,0) 70%),radial-gradient(70% 40% at 100% 45%,rgba(20,100,255,.3),rgba(0,0,0,0) 70%)}
+@keyframes wcNudge{0%,100%{transform:translateX(0);opacity:.5}50%{transform:translateX(8px);opacity:1}}
+
+.wc-liquid{z-index:-1;position:absolute;left:0;top:0;width:390px;height:844px;pointer-events:none;opacity:.5;filter:blur(30px)}
+.wc-spot{z-index:-1;position:absolute;left:-15px;top:162px;width:420px;height:420px;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .5s ease}
+.wc-paying .wc-spot{opacity:.5}
+.wc-blob{position:absolute;mix-blend-mode:screen;animation:wcBlob var(--dur,12s) ease-in-out infinite;animation-delay:var(--del,0s)}
+.wc-float{animation:wcFloat 7s ease-in-out infinite}
+.wc-nudge{animation:wcNudge 1.4s ease-in-out infinite}
+.wc-outbound{transition:opacity .35s ease,translate .6s cubic-bezier(.2,.8,.2,1),scale .6s cubic-bezier(.2,.8,.2,1)}
+.wc-paying .wc-outbound{opacity:0;translate:var(--ox,0px) var(--oy,0px);scale:1.2;pointer-events:none}
+.wc-paying .wc-scroll{overflow-y:hidden}
+.wc-turn.wc-pin{animation:wcPayIn .7s cubic-bezier(.3,.1,.2,1) both;animation-timeline:auto;animation-range:normal}
+.wc-turn.wc-pout{animation:wcPayOut .7s cubic-bezier(.3,.1,.2,1) both;animation-timeline:auto;animation-range:normal}
+.wc-bob{animation:wcBob 2.2s ease-in-out infinite}
+.wc-toast{animation:wcToast 2.4s ease both}
+.wc-turn{transform:rotateX(14deg) rotateY(-22deg) rotateZ(-3deg)}
+.wc-dot{width:6px;height:6px;border-radius:3px;background:#F2F4FF;opacity:.3}
+.wc-tap{transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .25s ease,box-shadow .25s ease}
+.wc-tap:active{transform:scale(.96) !important}
+
+@supports (animation-timeline: view()) {
+  .wc-page{animation:wcPage linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  .wc-rise{animation:wcRise linear both;animation-timeline:view();animation-range:cover 0% cover 100%}
+  .wc-turn{animation:wcTurn linear both;animation-timeline:scroll(nearest);animation-range:0px 844px}
+  .wc-dot{animation-timing-function:linear;animation-timeline:--wcs}
+  .wc-d1{animation-name:wcDotOut;animation-fill-mode:both;animation-range:0px 844px}
+  .wc-d2{animation-name:wcDotIn;animation-fill-mode:both;animation-range:0px 844px}
+}
+@media (prefers-reduced-motion:reduce){.wc-pin,.wc-pout,.wc-nudge,.wc-page,.wc-rise,.wc-turn,.wc-float,.wc-blob,.wc-bob,.wc-toast{animation:none}}

@@ -17,6 +17,22 @@ export async function launchPackage(pkg) {
   try { await AppList.launch({ package: pkg }); return true; } catch (e) { return false; }
 }
 
+export async function listShortcuts(pkg) {
+  if (!native()) return [{ id: 'scan', label: '掃碼付款' }, { id: 'pay', label: '付款碼' }, { id: 'history', label: '交易紀錄' }];
+  try {
+    const r = await AppList.shortcuts({ package: pkg });
+    return r.shortcuts || [];
+  } catch (e) { return []; }
+}
+
+export async function launchShortcut(pkg, sc) {
+  if (!native()) return false;
+  try {
+    await AppList.launchShortcut({ package: pkg, action: sc.action, data: sc.data, targetPackage: sc.targetPackage, targetClass: sc.targetClass });
+    return true;
+  } catch (e) { return false; }
+}
+
 const KEY = 'payhub.targets.v1';
 export function loadTargets() {
   try {

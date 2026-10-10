@@ -1,7 +1,7 @@
 import React from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { openProvider } from './launch.js';
-import { listApps, loadTargets, saveTargets } from './appList.js';
+import { listApps, listShortcuts, loadTargets, saveTargets } from './appList.js';
 
 // "a:b;c:d" -> React style object
 function css(str) {
@@ -27,7 +27,7 @@ const GLYPH_PROPS = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'rou
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, apps: [], appsLoading: false, q: '' };
+    this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, k: 1, H: 844, exitAsk: false, targets: loadTargets(), pickOpen: false, pickSlot: 0, shortcuts: [], scLoading: false, apps: [], appsLoading: false, q: '' };
     this.outTimer = null;
     this.sw = null;
     this.swiped = false;
@@ -245,6 +245,7 @@ export default class App extends React.Component {
 
   async openPicker() {
     this.setState({ pickOpen: true, pickSlot: this.state.sel, q: '', appsLoading: !this.state.apps.length });
+    this.loadShortcuts((this.state.targets[this.state.sel] || {}).pkg);
     if (!this.state.apps.length) {
       try {
         const apps = await listApps();
@@ -256,11 +257,32 @@ export default class App extends React.Component {
     }
   }
 
+  async loadShortcuts(pkg) {
+    if (!pkg) { this.setState({ shortcuts: [], scLoading: false }); return; }
+    this.setState({ scLoading: true, shortcuts: [] });
+    const list = await listShortcuts(pkg);
+    if ((this.state.targets[this.state.pickSlot] || {}).pkg === pkg) this.setState({ shortcuts: list, scLoading: false });
+  }
+
   assignApp(app) {
     const t = this.state.targets.slice();
-    t[this.state.pickSlot] = app ? { pkg: app.package, label: app.label, icon: app.icon || '' } : null;
+    t[this.state.pickSlot] = app ? { pkg: app.package, label: app.label, icon: app.icon || '', shortcut: null } : null;
     saveTargets(t);
     this.setState({ targets: t });
+    this.loadShortcuts(app ? app.package : null);
+  }
+
+  assignShortcut(sc) {
+    const t = this.state.targets.slice();
+    const cur = t[this.state.pickSlot];
+    if (!cur) return;
+    t[this.state.pickSlot] = Object.assign({}, cur, { shortcut: sc });
+    saveTargets(t);
+    this.setState({ targets: t });
+  }
+
+  pickSlotTo(i) {
+    this.setState({ pickSlot: i }, () => this.loadShortcuts((this.state.targets[i] || {}).pkg));
   }
 
   // scale/zoom to scale pointer deltas from screen px to layout px
@@ -386,7 +408,7 @@ export default class App extends React.Component {
       icon: (st.targets[i] && st.targets[i].icon) || '',
       name: p.name, glyph: p.glyph, gA: p.gA, gB: p.gB, lite: p.lite,
       on: i === sel,
-      status: (st.targets[i] ? '→ ' + st.targets[i].label : (i === sel ? 'Default' : 'Tap to make default')),
+      status: (st.targets[i] ? '→ ' + st.targets[i].label + (st.targets[i].shortcut ? ' · ' + st.targets[i].shortcut.label : '') : (i === sel ? 'Default' : 'Tap to make default')),
       bg: i === sel ? 'linear-gradient(145deg,' + p.gA + ',rgba(255,255,255,.05))' : 'linear-gradient(145deg,rgba(255,255,255,.18),rgba(255,255,255,.07))',
       edge: i === sel ? p.lite : 'rgba(255,255,255,.2)',
       ring: i === sel ? p.lite : 'rgba(255,255,255,.3)',
@@ -407,7 +429,7 @@ export default class App extends React.Component {
       hintStyle: 'top:' + Math.round(st.H * 0.673) + 'px;opacity:' + (paying ? 1 : 0) + ';visibility:' + (paying ? 'visible' : 'hidden') + ';transition:opacity .6s ease ' + (paying ? '1.1s' : '0s') + ',visibility 0s linear ' + (paying ? '0s' : '.6s') + ';',
       cancelPay: () => self.closePay(),
       selColor: P[sel].lite,
-      ctaLabel: 'Open ' + ((st.targets[sel] && st.targets[sel].label) || P[sel].name),
+      ctaLabel: 'Open ' + ((st.targets[sel] && (st.targets[sel].label + (st.targets[sel].shortcut ? ' · ' + st.targets[sel].shortcut.label : ''))) || P[sel].name),
       hasToast: !!st.toast,
       toast: st.toast,
       openSel: async () => {
@@ -563,12 +585,30 @@ export default class App extends React.Component {
               </div>
               <div style={css('display:flex;gap:8px')}>
                 {v.radios.map((d, i) => (
-                  <button key={d.name} type="button" onClick={() => this.setState({ pickSlot: i })} className="wc-tap" style={css('flex:1;min-width:0;border:0;border-radius:16px;padding:10px 8px;text-align:left;color:#F2F4FF;background:' + (this.state.pickSlot === i ? 'linear-gradient(145deg,' + d.gA + ',rgba(255,255,255,.08))' : 'rgba(255,255,255,.08)') + ';box-shadow:inset 0 0 0 ' + (this.state.pickSlot === i ? '1.5px ' + d.lite : '1px rgba(255,255,255,.2)'))}>
+                  <button key={d.name} type="button" onClick={() => this.pickSlotTo(i)} className="wc-tap" style={css('flex:1;min-width:0;border:0;border-radius:16px;padding:10px 8px;text-align:left;color:#F2F4FF;background:' + (this.state.pickSlot === i ? 'linear-gradient(145deg,' + d.gA + ',rgba(255,255,255,.08))' : 'rgba(255,255,255,.08)') + ';box-shadow:inset 0 0 0 ' + (this.state.pickSlot === i ? '1.5px ' + d.lite : '1px rgba(255,255,255,.2)'))}>
                     <div style={css('display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;opacity:.85')}>{d.icon ? <img src={d.icon} alt="" width="16" height="16" style={{ borderRadius: 4 }} /> : null}{d.name}</div>
-                    <div style={css('font-size:13px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{this.state.targets[i] ? this.state.targets[i].label : '預設'}</div>
+                    <div style={css('font-size:13px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis')}>{this.state.targets[i] ? this.state.targets[i].label + (this.state.targets[i].shortcut ? ' · ' + this.state.targets[i].shortcut.label : '') : '預設'}</div>
                   </button>
                 ))}
               </div>
+              {this.state.targets[this.state.pickSlot] && (
+                <div>
+                  <div style={css('font-size:12px;font-weight:700;opacity:.7;margin:0 2px 6px')}>捷徑(長按 App 圖示會看到的功能)</div>
+                  <div className="wc-applist" style={css('display:flex;gap:8px;overflow-x:auto;padding-bottom:2px')}>
+                    {(() => {
+                      const cur = this.state.targets[this.state.pickSlot];
+                      const chip = (key, label, on, fn) => (
+                        <button key={key} type="button" onClick={fn} className="wc-tap" style={css('flex:none;height:38px;padding:0 14px;border:0;border-radius:19px;color:#F2F4FF;font-size:13px;font-weight:700;white-space:nowrap;background:' + (on ? 'rgba(90,162,255,.32)' : 'rgba(255,255,255,.1)') + ';box-shadow:inset 0 0 0 ' + (on ? '1.5px #5AA2FF' : '1px rgba(255,255,255,.2)'))}>{label}</button>
+                      );
+                      return [chip('_app', '開啟 App', !cur.shortcut, () => this.assignShortcut(null))].concat(
+                        this.state.shortcuts.map((sc) => chip(sc.id, sc.label, cur.shortcut && cur.shortcut.id === sc.id, () => this.assignShortcut(sc)))
+                      );
+                    })()}
+                    {this.state.scLoading && <span style={css('align-self:center;color:#9AA0B8;font-size:13px')}>Loading…</span>}
+                    {!this.state.scLoading && !this.state.shortcuts.length && <span style={css('align-self:center;color:#9AA0B8;font-size:12px;white-space:nowrap')}>沒有可讀取的捷徑</span>}
+                  </div>
+                </div>
+              )}
               <input value={this.state.q} onChange={(e) => this.setState({ q: e.target.value })} placeholder="Search apps" style={css("height:42px;border-radius:14px;border:0;padding:0 14px;background:rgba(255,255,255,.1);color:#fff;font-size:15px;outline:none;font-family:'DM Sans',system-ui,sans-serif;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)")} />
               <div className="wc-applist" style={css('flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px')}>
                 <button type="button" onClick={() => this.assignApp(null)} className="wc-tap" style={css('display:flex;align-items:center;gap:12px;min-height:52px;border:0;border-radius:14px;padding:6px 10px;background:rgba(255,255,255,.06);color:#9AA0B8;text-align:left;font-size:15px;font-weight:500')}>使用預設 App</button>

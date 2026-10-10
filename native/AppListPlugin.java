@@ -1,7 +1,11 @@
 package com.payhub.app;
 
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
+import android.content.res.XmlResourceParser;
+import android.net.Uri;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -14,6 +18,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import org.xmlpull.v1.XmlPullParser;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -68,6 +74,101 @@ public class AppListPlugin extends Plugin {
         in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(in);
         call.resolve();
+    }
+
+    private static final String NS = "http://schemas.android.com/apk/res/android";
+
+    // 讀取其他 App 的「靜態捷徑」(長按圖示的選單)。動態捷徑(例如 LINE 的聯絡人)只有預設桌面能讀,這裡讀不到。
+    @PluginMethod
+    public void shortcuts(PluginCall call) {
+        String pkg = call.getString("package");
+        JSArray out = new JSArray();
+        if (pkg == null) { call.reject("missing package"); return; }
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            Intent q = new Intent(Intent.ACTION_MAIN);
+            q.addCategory(Intent.CATEGORY_LAUNCHER);
+            q.setPackage(pkg);
+            Set<String> seen = new HashSet<>();
+            for (ResolveInfo ri : pm.queryIntentActivities(q, PackageManager.GET_META_DATA)) {
+                ActivityInfo ai = ri.activityInfo;
+                int resId = ai.metaData != null ? ai.metaData.getInt("android.app.shortcuts", 0) : 0;
+                if (resId == 0) continue;
+                Resources res = pm.getResourcesForApplication(ai.applicationInfo);
+                XmlResourceParser xp = pm.getXml(pkg, resId, ai.applicationInfo);
+                if (xp == null) continue;
+                String id = null, label = null, action = null, tp = null, tc = null, data = null;
+                boolean inShortcut = false, enabled = true;
+                int ev = xp.getEventType();
+                while (ev != XmlPullParser.END_DOCUMENT) {
+                    if (ev == XmlPullParser.START_TAG) {
+                        String tag = xp.getName();
+                        if ("shortcut".equals(tag)) {
+                            inShortcut = true;
+                            id = xp.getAttributeValue(NS, "shortcutId");
+                            enabled = xp.getAttributeBooleanValue(NS, "enabled", true);
+                            label = resolve(xp, res, "shortcutShortLabel");
+                            if (label == null) label = resolve(xp, res, "shortcutLongLabel");
+                            action = null; tp = null; tc = null; data = null;
+                        } else if ("intent".equals(tag) && inShortcut && action == null && tc == null && data == null) {
+                            action = xp.getAttributeValue(NS, "action");
+                            tp = xp.getAttributeValue(NS, "targetPackage");
+                            tc = xp.getAttributeValue(NS, "targetClass");
+                            data = xp.getAttributeValue(NS, "data");
+                        }
+                    } else if (ev == XmlPullParser.END_TAG && "shortcut".equals(xp.getName())) {
+                        if (inShortcut && enabled && label != null && id != null && seen.add(id)) {
+                            JSObject o = new JSObject();
+                            o.put("id", id);
+                            o.put("label", label);
+                            o.put("action", action);
+                            o.put("targetPackage", tp);
+                            o.put("targetClass", tc);
+                            o.put("data", data);
+                            out.put(o);
+                        }
+                        inShortcut = false;
+                    }
+                    ev = xp.next();
+                }
+            }
+        } catch (Exception e) {
+            // 讀不到就回傳空清單
+        }
+        JSObject res = new JSObject();
+        res.put("shortcuts", out);
+        call.resolve(res);
+    }
+
+    private String resolve(XmlResourceParser xp, Resources res, String attr) {
+        try {
+            int rid = xp.getAttributeResourceValue(NS, attr, 0);
+            if (rid != 0) return res.getString(rid);
+            return xp.getAttributeValue(NS, attr);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @PluginMethod
+    public void launchShortcut(PluginCall call) {
+        String pkg = call.getString("package");
+        if (pkg == null) { call.reject("missing package"); return; }
+        try {
+            String action = call.getString("action");
+            String data = call.getString("data");
+            String tp = call.getString("targetPackage");
+            String tc = call.getString("targetClass");
+            Intent in = new Intent(action != null ? action : Intent.ACTION_VIEW);
+            if (data != null) in.setData(Uri.parse(data));
+            if (tc != null) in.setClassName(tp != null ? tp : pkg, tc);
+            else in.setPackage(pkg);
+            in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(in);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("launch failed: " + e.getMessage());
+        }
     }
 
     private String iconToBase64(Drawable d) {

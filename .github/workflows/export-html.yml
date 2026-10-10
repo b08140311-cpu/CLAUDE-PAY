@@ -1,0 +1,39 @@
+name: Export exact MPay HTML
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save vite-plugin-singlefile
+      - name: Build exact standalone HTML
+        run: |
+          cat > vite.single.config.mjs <<'EOF'
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          import { viteSingleFile } from 'vite-plugin-singlefile';
+          export default defineConfig({plugins:[react(),viteSingleFile()],base:'./',build:{assetsInlineLimit:100000000,cssCodeSplit:false}});
+          EOF
+          npx vite build --config vite.single.config.mjs
+          cp dist/index.html MPay-Exact-Preview.html
+          test $(wc -c < MPay-Exact-Preview.html) -gt 10000
+      - name: Upload HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MPay-Exact-HTML
+          path: MPay-Exact-Preview.html
+      - name: Publish direct HTML download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view html-preview || gh release create html-preview --title "MPay exact HTML preview" --notes "Standalone HTML built directly from the original React source."
+          gh release upload html-preview MPay-Exact-Preview.html --clobber
